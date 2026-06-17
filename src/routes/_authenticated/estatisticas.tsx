@@ -132,7 +132,7 @@ function StatsPage() {
   const SVC_COLORS = ["#2563EB", "#D97706", "#94A3B8"];
 
   return (
-    <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
+    <div className="p-4 lg:p-6 space-y-4 max-w-[1600px] mx-auto">
       <header className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1">

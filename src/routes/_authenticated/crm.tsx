@@ -100,7 +100,7 @@ function CRMPage() {
   }
 
   return (
-    <div className="p-6 space-y-4 h-screen flex flex-col">
+    <div className="p-4 lg:p-6 space-y-4 h-[calc(100dvh-3.5rem-4rem)] lg:h-screen flex flex-col">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">CRM</h1>

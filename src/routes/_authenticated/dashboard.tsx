@@ -137,7 +137,7 @@ function DashboardPage() {
   const overdueCount = leads.filter(isOverdue).length;
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Visão Geral</h1>
         <p className="text-muted-foreground mt-0.5 text-sm capitalize">

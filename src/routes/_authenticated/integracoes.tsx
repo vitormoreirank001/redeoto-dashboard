@@ -32,7 +32,7 @@ function IntegracoesPage() {
   }
 
   return (
-    <div className="p-6 space-y-4 max-w-3xl mx-auto">
+    <div className="p-4 lg:p-6 space-y-4 max-w-3xl mx-auto">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Integrações</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">
