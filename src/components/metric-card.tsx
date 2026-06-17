@@ -25,7 +25,7 @@ export function MetricCard({
   return (
     <div
       className={cn(
-        "rounded-xl bg-card border border-border p-4 transition-colors",
+        "rounded-xl bg-card border border-border shadow-sm p-4 transition-colors",
         accent && "border-primary/40"
       )}
     >

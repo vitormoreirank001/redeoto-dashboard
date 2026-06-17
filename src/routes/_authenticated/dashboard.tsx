@@ -11,7 +11,9 @@ import {
   PhoneCall,
   PhoneIncoming,
   TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
 import {
   formatBRL,
   formatTodayPt,
@@ -23,6 +25,7 @@ import {
   yesterdayISO,
 } from "@/lib/date-ranges";
 import { Progress } from "@/components/ui/progress";
+import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -35,6 +38,18 @@ interface Lead {
   stage: string;
   budget_amount: number | null;
   checklist: Record<string, boolean> | null;
+  updated_at: string;
+}
+
+const SLA_MS: Record<string, number> = {
+  novo: 30 * 60 * 1000,
+  contato: 24 * 60 * 60 * 1000,
+};
+
+function isOverdue(lead: Lead) {
+  const sla = SLA_MS[lead.stage];
+  if (!sla) return false;
+  return Date.now() - new Date(lead.updated_at).getTime() > sla;
 }
 interface Call {
   date: string;
@@ -64,7 +79,9 @@ function DashboardPage() {
     queryKey: ["dashboard"],
     queryFn: async () => {
       const [leadsR, callsR, goalR] = await Promise.all([
-        supabase.from("leads").select("entry_date,appointment_date,stage,budget_amount,checklist"),
+        supabase
+          .from("leads")
+          .select("entry_date,appointment_date,stage,budget_amount,checklist,updated_at"),
         supabase.from("daily_calls").select("date,calls_made,calls_answered"),
         supabase
           .from("monthly_goals")
@@ -117,18 +134,20 @@ function DashboardPage() {
   const made = sumCalls("calls_made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
+  const overdueCount = leads.filter(isOverdue).length;
+
   return (
     <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Visão Geral</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Visão Geral</h1>
         <p className="text-muted-foreground mt-0.5 text-sm capitalize">
           {formatTodayPt()} · {greeting()}
           {userName ? `, ${userName}` : ""}
         </p>
       </header>
 
-      <section>
-        <div className="rounded-2xl bg-card border-2 border-primary/50 p-5 relative overflow-hidden">
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 rounded-2xl bg-card border-2 border-primary/50 shadow-sm p-5 relative overflow-hidden">
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
           <div className="relative">
             <div className="flex items-start justify-between flex-wrap gap-4">
@@ -158,6 +177,41 @@ function DashboardPage() {
             </div>
           </div>
         </div>
+
+        <Link
+          to="/crm"
+          className={cn(
+            "rounded-2xl border-2 shadow-sm p-5 flex flex-col justify-between transition-colors",
+            overdueCount > 0
+              ? "bg-destructive/5 border-destructive/40 hover:border-destructive"
+              : "bg-card border-border hover:border-primary/40"
+          )}
+        >
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-muted-foreground">Leads atrasados</p>
+            <div
+              className={cn(
+                "h-9 w-9 rounded-lg flex items-center justify-center",
+                overdueCount > 0 ? "bg-destructive/15 text-destructive" : "bg-secondary text-muted-foreground"
+              )}
+            >
+              <AlertTriangle className="h-4 w-4" />
+            </div>
+          </div>
+          <div>
+            <p
+              className={cn(
+                "text-4xl font-extrabold mt-1",
+                overdueCount > 0 ? "text-destructive" : "text-foreground"
+              )}
+            >
+              {overdueCount}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {overdueCount > 0 ? "Sem contato dentro do prazo — ver no CRM" : "Tudo dentro do prazo"}
+            </p>
+          </div>
+        </Link>
       </section>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">

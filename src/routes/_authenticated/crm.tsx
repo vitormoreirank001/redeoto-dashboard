@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
+import { Plus, AlertTriangle } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
 import { formatBRL } from "@/lib/date-ranges";
@@ -28,6 +28,18 @@ export interface Lead {
   checklist: Record<string, boolean>;
   notes: string | null;
   history: Array<{ at: string; text: string }>;
+  updated_at: string;
+}
+
+const SLA_MS: Record<string, number> = {
+  novo: 30 * 60 * 1000, // 30 min sem mover de "Novo Lead"
+  contato: 24 * 60 * 60 * 1000, // 24h sem mover de "Contato Feito"
+};
+
+function isOverdue(lead: Lead) {
+  const sla = SLA_MS[lead.stage];
+  if (!sla) return false;
+  return Date.now() - new Date(lead.updated_at).getTime() > sla;
 }
 
 const COLUMNS = [
@@ -91,7 +103,7 @@ function CRMPage() {
     <div className="p-6 space-y-4 h-screen flex flex-col">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">CRM</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">CRM</h1>
           <p className="text-muted-foreground mt-0.5 text-sm">Funil de vendas</p>
         </div>
         <Button onClick={() => setCreating(true)}>
@@ -106,7 +118,7 @@ function CRMPage() {
             return (
               <div
                 key={col.id}
-                className="w-72 shrink-0 flex flex-col bg-card border border-border rounded-xl"
+                className="w-72 shrink-0 flex flex-col bg-card border border-border rounded-xl shadow-sm"
                 onDragOver={(e) => e.preventDefault()}
                 onDrop={() => onDrop(col.id)}
               >
@@ -120,24 +132,36 @@ function CRMPage() {
                   </span>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                  {items.map((lead) => (
+                  {items.map((lead) => {
+                    const overdue = isOverdue(lead);
+                    return (
                     <div
                       key={lead.id}
                       draggable
                       onDragStart={() => onDragStart(lead.id)}
                       onClick={() => setOpenLead(lead)}
                       className={cn(
-                        "bg-background border border-border rounded-lg p-3 cursor-pointer hover:border-primary/50 transition-colors",
+                        "bg-background border rounded-lg p-3 cursor-pointer transition-colors",
+                        overdue
+                          ? "border-destructive/60 hover:border-destructive"
+                          : "border-border hover:border-primary/50",
                         draggingId === lead.id && "opacity-50"
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
-                        {lead.urgent && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium shrink-0">
-                            Urgente
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1 shrink-0">
+                          {overdue && (
+                            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
+                              <AlertTriangle className="h-3 w-3" /> Atrasado
+                            </span>
+                          )}
+                          {lead.urgent && (
+                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium">
+                              Urgente
+                            </span>
+                          )}
+                        </div>
                       </div>
                       {lead.phone && (
                         <p className="text-xs text-muted-foreground mt-1">{lead.phone}</p>
@@ -157,7 +181,8 @@ function CRMPage() {
                         )}
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                   {items.length === 0 && (
                     <div className="text-center py-8 text-xs text-muted-foreground/60">
                       Sem leads

@@ -134,7 +134,7 @@ function StatsPage() {
   return (
     <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
       <header className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-bold tracking-tight">Estatísticas</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
           {(["today", "7d", "30d", "month"] as Range[]).map((r) => (
             <button
@@ -239,7 +239,7 @@ function StatsPage() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5">
+    <section className="bg-card border border-border rounded-xl shadow-sm p-5">
       <h2 className="text-sm font-semibold mb-3 text-foreground">{title}</h2>
       {children}
     </section>

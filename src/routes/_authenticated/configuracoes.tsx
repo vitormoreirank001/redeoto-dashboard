@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatBRL } from "@/lib/date-ranges";
-import { Plus, Trash2, Phone } from "lucide-react";
+import { Plus, Trash2, Phone, Image as ImageIcon } from "lucide-react";
 import {
   Table,
   TableBody,
@@ -31,6 +31,42 @@ function SettingsPage() {
   const now = new Date();
   const Y = now.getFullYear();
   const M = now.getMonth() + 1;
+
+  // ---- Branding (logo) ----
+  const [uploading, setUploading] = useState(false);
+  const settingsQ = useQuery({
+    queryKey: ["app_settings"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("app_settings")
+        .select("logo_url")
+        .eq("id", true)
+        .maybeSingle();
+      return data;
+    },
+  });
+
+  async function uploadLogo(file: File) {
+    setUploading(true);
+    const ext = file.name.split(".").pop();
+    const path = `logo-${Date.now()}.${ext}`;
+    const { error: upErr } = await supabase.storage.from("branding").upload(path, file, {
+      upsert: true,
+    });
+    if (upErr) {
+      setUploading(false);
+      return toast.error(upErr.message);
+    }
+    const { data: pub } = supabase.storage.from("branding").getPublicUrl(path);
+    const { error } = await supabase
+      .from("app_settings")
+      .update({ logo_url: pub.publicUrl })
+      .eq("id", true);
+    setUploading(false);
+    if (error) return toast.error(error.message);
+    toast.success("Logo atualizada");
+    qc.invalidateQueries({ queryKey: ["app_settings"] });
+  }
 
   // ---- Goal ----
   const [goal, setGoal] = useState("");
@@ -126,8 +162,44 @@ function SettingsPage() {
   return (
     <div className="p-6 space-y-5 max-w-5xl mx-auto">
       <header>
-        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
       </header>
+
+      <Section title="Marca" icon={<ImageIcon className="h-4 w-4 text-primary" />}>
+        <div className="flex items-center gap-4 flex-wrap">
+          {settingsQ.data?.logo_url ? (
+            <img
+              src={settingsQ.data.logo_url}
+              alt="Logo atual"
+              className="h-12 max-w-[200px] object-contain bg-background border border-border rounded-lg p-2"
+            />
+          ) : (
+            <div className="h-12 w-32 flex items-center justify-center bg-background border border-dashed border-border rounded-lg text-xs text-muted-foreground">
+              Sem logo
+            </div>
+          )}
+          <div>
+            <input
+              id="logo-input"
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) uploadLogo(file);
+              }}
+            />
+            <Label htmlFor="logo-input">
+              <Button asChild variant="outline" disabled={uploading}>
+                <span>{uploading ? "Enviando..." : "Trocar logo"}</span>
+              </Button>
+            </Label>
+            <p className="text-xs text-muted-foreground mt-1.5">
+              Aparece na sidebar e na tela de login. Sem logo, mostra o texto "ManagedDentista".
+            </p>
+          </div>
+        </div>
+      </Section>
 
       <Section title="Meta de Faturamento">
         <div className="flex items-end gap-3 flex-wrap">
@@ -283,7 +355,7 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-5">
+    <section className="bg-card border border-border rounded-xl shadow-sm p-5">
       <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
         {icon}
         {title}

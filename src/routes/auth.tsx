@@ -14,11 +14,18 @@ export const Route = createFileRoute("/auth")({
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       if (data.session) navigate({ to: "/dashboard" });
     });
+    supabase
+      .from("app_settings")
+      .select("logo_url")
+      .eq("id", true)
+      .maybeSingle()
+      .then(({ data }) => setLogoUrl(data?.logo_url ?? null));
   }, [navigate]);
 
   const [loginEmail, setLoginEmail] = useState("");
@@ -60,14 +67,18 @@ function AuthPage() {
     <div className="min-h-screen flex items-center justify-center px-4 bg-background">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-extrabold tracking-tight">
-            <span className="text-primary">Rede</span>
-            <span className="text-foreground">oto</span>
-          </h1>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-12 max-w-[220px] object-contain mx-auto" />
+          ) : (
+            <h1 className="text-3xl font-extrabold tracking-tight">
+              <span className="text-primary">Managed</span>
+              <span className="text-foreground">Dentista</span>
+            </h1>
+          )}
           <p className="text-sm text-muted-foreground mt-2">Painel Administrativo</p>
         </div>
 
-        <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl">
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/5">
           <Tabs defaultValue="login">
             <TabsList className="grid w-full grid-cols-2 mb-6 bg-secondary">
               <TabsTrigger value="login">Entrar</TabsTrigger>

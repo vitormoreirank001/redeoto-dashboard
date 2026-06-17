@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, KanbanSquare, LineChart, Settings, LogOut } from "lucide-react";
+import { LayoutDashboard, KanbanSquare, LineChart, Settings, Plug, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,7 @@ const navItems = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/crm", label: "CRM", icon: KanbanSquare },
   { to: "/estatisticas", label: "Estatísticas", icon: LineChart },
+  { to: "/integracoes", label: "Integrações", icon: Plug },
   { to: "/configuracoes", label: "Configurações", icon: Settings },
 ] as const;
 
@@ -18,6 +19,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -31,6 +33,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         .maybeSingle();
       setUserName(profile?.full_name || data.user.email?.split("@")[0] || "Usuário");
     })();
+    supabase
+      .from("app_settings")
+      .select("logo_url")
+      .eq("id", true)
+      .maybeSingle()
+      .then(({ data }) => setLogoUrl(data?.logo_url ?? null));
   }, []);
 
   async function handleLogout() {
@@ -44,10 +52,14 @@ export function AppShell({ children }: { children: ReactNode }) {
     <div className="min-h-screen flex bg-background text-foreground">
       <aside className="w-64 shrink-0 bg-sidebar border-r border-sidebar-border flex flex-col">
         <div className="px-6 py-6 border-b border-sidebar-border">
-          <h1 className="text-2xl font-extrabold tracking-tight">
-            <span className="text-primary">Rede</span>
-            <span className="text-sidebar-foreground">oto</span>
-          </h1>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo" className="h-9 max-w-[160px] object-contain" />
+          ) : (
+            <h1 className="text-xl font-extrabold tracking-tight">
+              <span className="text-primary">Managed</span>
+              <span className="text-sidebar-foreground">Dentista</span>
+            </h1>
+          )}
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">
             Painel
           </p>
@@ -64,8 +76,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                 className={cn(
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   active
-                    ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                    : "text-sidebar-foreground hover:bg-sidebar-accent"
+                    ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
+                    : "text-sidebar-foreground hover:bg-secondary"
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
