@@ -121,15 +121,15 @@ function StatsPage() {
       atendidas: c.calls_answered,
     }));
 
-  const tickStyle = { fill: "oklch(0.7 0 0)", fontSize: 11 };
+  const tickStyle = { fill: "#64748B", fontSize: 11 };
   const tooltipStyle = {
-    backgroundColor: "oklch(0.205 0 0)",
-    border: "1px solid oklch(0.27 0 0)",
+    backgroundColor: "#FFFFFF",
+    border: "1px solid #E2E8F0",
     borderRadius: 8,
-    color: "white",
+    color: "#0F172A",
   };
 
-  const SVC_COLORS = ["#FF6B00", "oklch(0.82 0.17 85)", "oklch(0.7 0 0)"];
+  const SVC_COLORS = ["#2563EB", "#D97706", "#94A3B8"];
 
   return (
     <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
@@ -156,14 +156,14 @@ function StatsPage() {
       <Card title="Tendências">
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={series}>
-            <CartesianGrid stroke="oklch(0.27 0 0)" strokeDasharray="3 3" />
+            <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
             <XAxis dataKey="label" tick={tickStyle} />
             <YAxis tick={tickStyle} />
             <Tooltip contentStyle={tooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="leads" stroke="oklch(0.85 0 0)" strokeWidth={2} name="Leads" />
-            <Line type="monotone" dataKey="agend" stroke="oklch(0.7 0 0)" strokeWidth={2} name="Agendamentos" />
-            <Line type="monotone" dataKey="vendas" stroke="#FF6B00" strokeWidth={2.5} name="Vendas" />
+            <Line type="monotone" dataKey="leads" stroke="#94A3B8" strokeWidth={2} name="Leads" />
+            <Line type="monotone" dataKey="agend" stroke="#0EA5E9" strokeWidth={2} name="Agendamentos" />
+            <Line type="monotone" dataKey="vendas" stroke="#2563EB" strokeWidth={2.5} name="Vendas" />
           </LineChart>
         </ResponsiveContainer>
       </Card>
@@ -222,13 +222,13 @@ function StatsPage() {
         <Card title="Desempenho Comercial — Ligações">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={callsData}>
-              <CartesianGrid stroke="oklch(0.27 0 0)" strokeDasharray="3 3" />
+              <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={tickStyle} />
               <YAxis tick={tickStyle} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="feitas" fill="oklch(0.7 0 0)" name="Feitas" />
-              <Bar dataKey="atendidas" fill="#FF6B00" name="Atendidas" />
+              <Bar dataKey="feitas" fill="#94A3B8" name="Feitas" />
+              <Bar dataKey="atendidas" fill="#2563EB" name="Atendidas" />
             </BarChart>
           </ResponsiveContainer>
         </Card>

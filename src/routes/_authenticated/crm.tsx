@@ -42,13 +42,13 @@ const COLUMNS = [
 
 const ORIGIN_LABEL: Record<string, { text: string; cls: string }> = {
   anuncio_meta: { text: "Anúncio Meta", cls: "bg-destructive/15 text-destructive" },
-  organico: { text: "Orgânico", cls: "bg-success/15 text-[oklch(0.72_0.18_145)]" },
-  indicacao: { text: "Indicação", cls: "bg-success/15 text-[oklch(0.72_0.18_145)]" },
+  organico: { text: "Orgânico", cls: "bg-success/15 text-[#16A34A]" },
+  indicacao: { text: "Indicação", cls: "bg-success/15 text-[#16A34A]" },
 };
 
 const SERVICE_LABEL: Record<string, { text: string; cls: string }> = {
   implante: { text: "Implante", cls: "bg-primary/15 text-primary" },
-  aparelho: { text: "Aparelho", cls: "bg-warning/15 text-[oklch(0.82_0.17_85)]" },
+  aparelho: { text: "Aparelho", cls: "bg-warning/15 text-[#D97706]" },
   outros: { text: "Outros", cls: "bg-muted text-muted-foreground" },
 };
 
@@ -134,7 +134,7 @@ function CRMPage() {
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
                         {lead.urgent && (
-                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[oklch(0.6_0.22_305)] font-medium shrink-0">
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium shrink-0">
                             Urgente
                           </span>
                         )}
