@@ -1,0 +1,294 @@
+import { useState, useEffect } from "react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
+import type { Lead } from "@/routes/_authenticated/crm";
+import { toast } from "sonner";
+import { Trash2 } from "lucide-react";
+
+const STAGES = [
+  { id: "novo", label: "🆕 Novo Lead" },
+  { id: "contato", label: "📞 Contato Feito" },
+  { id: "agendado", label: "📅 Agendado" },
+  { id: "orcamento", label: "💰 Em Orçamento" },
+  { id: "followup", label: "🔄 Follow-up Ativo" },
+  { id: "fechado", label: "✅ Fechado" },
+  { id: "perdido", label: "❌ Perdido" },
+];
+
+const CHECKLIST = [
+  { key: "primeiro_contato", label: "Primeiro contato feito" },
+  { key: "agendamento_oferecido", label: "Agendamento oferecido" },
+  { key: "avaliacao_realizada", label: "Avaliação realizada" },
+  { key: "orcamento_apresentado", label: "Orçamento apresentado" },
+  { key: "followup_24h", label: "Follow-up 24h" },
+  { key: "followup_3d", label: "Follow-up 3 dias" },
+  { key: "followup_7d", label: "Follow-up 7 dias" },
+  { key: "followup_14d", label: "Follow-up 14 dias" },
+];
+
+export function LeadModal({
+  lead,
+  onClose,
+  onSaved,
+}: {
+  lead: Lead | null;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const isNew = !lead;
+  const [form, setForm] = useState<Partial<Lead>>(() => ({
+    name: "",
+    phone: "",
+    origin: "organico",
+    service: "outros",
+    urgent: false,
+    budget_amount: null,
+    stage: "novo",
+    entry_date: new Date().toISOString().slice(0, 10),
+    appointment_date: null,
+    financing: null,
+    checklist: {},
+    notes: "",
+    history: [],
+    ...lead,
+  }));
+  const [newNote, setNewNote] = useState("");
+
+  useEffect(() => {
+    if (lead) setForm({ ...lead, checklist: lead.checklist || {}, history: lead.history || [] });
+  }, [lead]);
+
+  function update<K extends keyof Lead>(key: K, value: Lead[K]) {
+    setForm((f) => ({ ...f, [key]: value }));
+  }
+
+  function toggleCheck(key: string, val: boolean) {
+    setForm((f) => ({ ...f, checklist: { ...(f.checklist ?? {}), [key]: val } }));
+  }
+
+  async function save() {
+    if (!form.name?.trim()) return toast.error("Nome é obrigatório");
+    const payload = {
+      name: form.name.trim(),
+      phone: form.phone || null,
+      origin: form.origin,
+      service: form.service,
+      urgent: !!form.urgent,
+      budget_amount: form.budget_amount ? Number(form.budget_amount) : null,
+      stage: form.stage,
+      entry_date: form.entry_date,
+      appointment_date: form.appointment_date || null,
+      financing: form.financing || null,
+      checklist: form.checklist ?? {},
+      notes: form.notes || null,
+      history: form.history ?? [],
+    };
+    let error;
+    if (isNew) {
+      const { data: u } = await supabase.auth.getUser();
+      ({ error } = await supabase
+        .from("leads")
+        .insert({ ...payload, created_by: u.user?.id ?? null }));
+    } else {
+      ({ error } = await supabase.from("leads").update(payload).eq("id", lead!.id));
+    }
+    if (error) return toast.error(error.message);
+    onSaved();
+    onClose();
+  }
+
+  async function remove() {
+    if (!lead) return;
+    if (!confirm("Excluir este lead?")) return;
+    const { error } = await supabase.from("leads").delete().eq("id", lead.id);
+    if (error) return toast.error(error.message);
+    toast.success("Lead removido");
+    onSaved();
+    onClose();
+  }
+
+  function addNote() {
+    if (!newNote.trim()) return;
+    const entry = { at: new Date().toISOString(), text: newNote.trim() };
+    setForm((f) => ({ ...f, history: [entry, ...(f.history ?? [])] }));
+    setNewNote("");
+  }
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border">
+        <DialogHeader>
+          <DialogTitle className="text-xl">
+            {isNew ? "Novo Lead" : form.name || "Editar Lead"}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
+          <Field label="Nome *">
+            <Input value={form.name ?? ""} onChange={(e) => update("name", e.target.value)} />
+          </Field>
+          <Field label="Telefone">
+            <Input
+              value={form.phone ?? ""}
+              onChange={(e) => update("phone", e.target.value)}
+              placeholder="(31) 99999-0000"
+            />
+          </Field>
+          <Field label="Serviço de interesse">
+            <Select value={form.service} onValueChange={(v) => update("service", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="implante">Implante</SelectItem>
+                <SelectItem value="aparelho">Aparelho</SelectItem>
+                <SelectItem value="outros">Outros</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Origem">
+            <Select value={form.origin} onValueChange={(v) => update("origin", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="anuncio_meta">Anúncio Meta</SelectItem>
+                <SelectItem value="organico">Orgânico</SelectItem>
+                <SelectItem value="indicacao">Indicação</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Valor do orçamento (R$)">
+            <Input
+              type="number"
+              step="0.01"
+              value={form.budget_amount ?? ""}
+              onChange={(e) =>
+                update("budget_amount", e.target.value ? Number(e.target.value) : null)
+              }
+            />
+          </Field>
+          <Field label="Etapa">
+            <Select value={form.stage} onValueChange={(v) => update("stage", v)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {STAGES.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Data de entrada">
+            <Input
+              type="date"
+              value={form.entry_date ?? ""}
+              onChange={(e) => update("entry_date", e.target.value)}
+            />
+          </Field>
+          <Field label="Data do agendamento">
+            <Input
+              type="date"
+              value={form.appointment_date ?? ""}
+              onChange={(e) => update("appointment_date", e.target.value || null)}
+            />
+          </Field>
+          <Field label="Financiamento?">
+            <Select
+              value={form.financing ?? ""}
+              onValueChange={(v) => update("financing", v || null)}
+            >
+              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="sim">Sim</SelectItem>
+                <SelectItem value="nao">Não</SelectItem>
+                <SelectItem value="analise">Em análise</SelectItem>
+              </SelectContent>
+            </Select>
+          </Field>
+          <div className="flex items-center gap-2 pt-7">
+            <Checkbox
+              id="urgent"
+              checked={!!form.urgent}
+              onCheckedChange={(c) => update("urgent", !!c)}
+            />
+            <Label htmlFor="urgent" className="cursor-pointer">Marcar como Urgente</Label>
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold mb-3">Checklist de etapas</h4>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+            {CHECKLIST.map((c) => (
+              <div key={c.key} className="flex items-center gap-2">
+                <Checkbox
+                  id={c.key}
+                  checked={!!form.checklist?.[c.key]}
+                  onCheckedChange={(v) => toggleCheck(c.key, !!v)}
+                />
+                <Label htmlFor={c.key} className="text-sm cursor-pointer">{c.label}</Label>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold mb-3">Histórico / Observações</h4>
+          <div className="flex gap-2">
+            <Input
+              value={newNote}
+              onChange={(e) => setNewNote(e.target.value)}
+              placeholder="Adicionar nota..."
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addNote())}
+            />
+            <Button type="button" variant="secondary" onClick={addNote}>Adicionar</Button>
+          </div>
+          <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+            {(form.history ?? []).map((h, i) => (
+              <div key={i} className="bg-background border border-border rounded-md p-2 text-sm">
+                <p className="text-[10px] text-muted-foreground">
+                  {new Date(h.at).toLocaleString("pt-BR")}
+                </p>
+                <p>{h.text}</p>
+              </div>
+            ))}
+          </div>
+          <Textarea
+            className="mt-3"
+            placeholder="Notas gerais sobre o lead..."
+            value={form.notes ?? ""}
+            onChange={(e) => update("notes", e.target.value)}
+          />
+        </div>
+
+        <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
+          {!isNew ? (
+            <Button variant="ghost" onClick={remove} className="text-destructive hover:text-destructive">
+              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+            </Button>
+          ) : <div />}
+          <div className="flex gap-2">
+            <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+            <Button onClick={save}>Salvar</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs uppercase tracking-wider text-muted-foreground">{label}</Label>
+      {children}
+    </div>
+  );
+}
