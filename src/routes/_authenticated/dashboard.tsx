@@ -118,16 +118,49 @@ function DashboardPage() {
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
   return (
-    <div className="p-8 space-y-8 max-w-[1600px] mx-auto">
+    <div className="p-6 space-y-6 max-w-[1600px] mx-auto">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Visão Geral</h1>
-        <p className="text-muted-foreground mt-1 capitalize">
+        <h1 className="text-2xl font-bold tracking-tight">Visão Geral</h1>
+        <p className="text-muted-foreground mt-0.5 text-sm capitalize">
           {formatTodayPt()} · {greeting()}
           {userName ? `, ${userName}` : ""}
         </p>
       </header>
 
-      <Section title="Leads">
+      <section>
+        <div className="rounded-2xl bg-card border-2 border-primary/50 p-5 relative overflow-hidden">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+          <div className="relative">
+            <div className="flex items-start justify-between flex-wrap gap-4">
+              <div>
+                <p className="text-sm text-muted-foreground">Faturamento do mês</p>
+                <p className="text-4xl font-extrabold text-primary mt-1">
+                  {formatBRL(revenueMonth)}
+                </p>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Meta: <span className="text-foreground">{formatBRL(goal)}</span>
+                </p>
+              </div>
+              <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+                <TrendingUp className="h-6 w-6" />
+              </div>
+            </div>
+            <div className="mt-4">
+              <div className="flex justify-between text-xs text-muted-foreground mb-2">
+                <span>{pct}% atingido</span>
+                <span>
+                  {goal > 0
+                    ? `Faltam ${formatBRL(missing)} para a meta`
+                    : "Defina uma meta em Configurações"}
+                </span>
+              </div>
+              <Progress value={pct} className="h-3" />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <MetricCard
           title="Leads"
           icon={Users}
@@ -136,22 +169,16 @@ function DashboardPage() {
           week={countBetween(leadsByDate, ws, t)}
           month={countBetween(leadsByDate, ms, me)}
         />
-      </Section>
-
-      <Section title="Agendamentos">
         <MetricCard
-          title="Agendamentos Criados"
+          title="Agendamentos"
           icon={Calendar}
           today={countBetween(apptByDate, t, t)}
           yesterday={countBetween(apptByDate, y, y)}
           week={countBetween(apptByDate, ws, t)}
           month={countBetween(apptByDate, ms, me)}
         />
-      </Section>
-
-      <Section title="Atendimento">
         <MetricCard
-          title="Avaliações Realizadas"
+          title="Avaliações"
           icon={ClipboardCheck}
           today={countBetween(evalByDate, t, t)}
           yesterday={countBetween(evalByDate, y, y)}
@@ -159,7 +186,7 @@ function DashboardPage() {
           month={countBetween(evalByDate, ms, me)}
         />
         <MetricCard
-          title="Orçamentos Apresentados"
+          title="Orçamentos"
           icon={FileText}
           today={countBetween(quoteByDate, t, t)}
           yesterday={countBetween(quoteByDate, y, y)}
@@ -174,9 +201,6 @@ function DashboardPage() {
           week={countBetween(salesByDate, ws, t)}
           month={countBetween(salesByDate, ms, me)}
         />
-      </Section>
-
-      <Section title="Ligações">
         <MetricCard
           title="Ligações Feitas"
           icon={PhoneCall}
@@ -194,57 +218,11 @@ function DashboardPage() {
           month={ans}
           footer={
             <p className="text-xs text-muted-foreground">
-              Taxa de atendimento (mês):{" "}
-              <span className="text-primary font-semibold">{rate}%</span>
+              Atendimento: <span className="text-primary font-semibold">{rate}%</span>
             </p>
           }
         />
-      </Section>
-
-      <section>
-        <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-3">
-          Faturamento
-        </h2>
-        <div className="rounded-2xl bg-card border-2 border-primary/50 p-7 relative overflow-hidden">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
-          <div className="relative">
-            <div className="flex items-start justify-between flex-wrap gap-4">
-              <div>
-                <p className="text-sm text-muted-foreground">Faturamento do mês</p>
-                <p className="text-5xl font-extrabold text-primary mt-2">
-                  {formatBRL(revenueMonth)}
-                </p>
-                <p className="text-sm text-muted-foreground mt-2">
-                  Meta: <span className="text-foreground">{formatBRL(goal)}</span>
-                </p>
-              </div>
-              <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
-                <TrendingUp className="h-6 w-6" />
-              </div>
-            </div>
-            <div className="mt-6">
-              <div className="flex justify-between text-xs text-muted-foreground mb-2">
-                <span>{pct}% atingido</span>
-                <span>
-                  {goal > 0
-                    ? `Faltam ${formatBRL(missing)} para a meta`
-                    : "Defina uma meta em Configurações"}
-                </span>
-              </div>
-              <Progress value={pct} className="h-3" />
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section>
-      <h2 className="text-xs uppercase tracking-widest text-muted-foreground mb-3">{title}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{children}</div>
-    </section>
   );
 }

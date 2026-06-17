@@ -88,11 +88,11 @@ function CRMPage() {
   }
 
   return (
-    <div className="p-8 space-y-6 h-screen flex flex-col">
+    <div className="p-6 space-y-4 h-screen flex flex-col">
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground mt-1">Funil de vendas</p>
+          <h1 className="text-2xl font-bold tracking-tight">CRM</h1>
+          <p className="text-muted-foreground mt-0.5 text-sm">Funil de vendas</p>
         </div>
         <Button onClick={() => setCreating(true)}>
           <Plus className="h-4 w-4 mr-2" /> Novo Lead

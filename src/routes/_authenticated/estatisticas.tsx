@@ -132,9 +132,9 @@ function StatsPage() {
   const SVC_COLORS = ["#2563EB", "#D97706", "#94A3B8"];
 
   return (
-    <div className="p-8 space-y-6 max-w-[1600px] mx-auto">
+    <div className="p-6 space-y-4 max-w-[1600px] mx-auto">
       <header className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-3xl font-bold tracking-tight">Estatísticas</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Estatísticas</h1>
         <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
           {(["today", "7d", "30d", "month"] as Range[]).map((r) => (
             <button
@@ -196,7 +196,7 @@ function StatsPage() {
         </div>
       </Card>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card title="Ranking de Serviços (Vendas)">
           <ResponsiveContainer width="100%" height={260}>
             <PieChart>
@@ -239,8 +239,8 @@ function StatsPage() {
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-6">
-      <h2 className="text-sm font-semibold mb-4 text-foreground">{title}</h2>
+    <section className="bg-card border border-border rounded-xl p-5">
+      <h2 className="text-sm font-semibold mb-3 text-foreground">{title}</h2>
       {children}
     </section>
   );

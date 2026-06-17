@@ -124,9 +124,9 @@ function SettingsPage() {
   }
 
   return (
-    <div className="p-8 space-y-8 max-w-5xl mx-auto">
+    <div className="p-6 space-y-5 max-w-5xl mx-auto">
       <header>
-        <h1 className="text-3xl font-bold tracking-tight">Configurações</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Configurações</h1>
       </header>
 
       <Section title="Meta de Faturamento">
@@ -283,8 +283,8 @@ function Section({
   children: React.ReactNode;
 }) {
   return (
-    <section className="bg-card border border-border rounded-xl p-6">
-      <h2 className="text-base font-semibold mb-4 flex items-center gap-2">
+    <section className="bg-card border border-border rounded-xl p-5">
+      <h2 className="text-base font-semibold mb-3 flex items-center gap-2">
         {icon}
         {title}
       </h2>
