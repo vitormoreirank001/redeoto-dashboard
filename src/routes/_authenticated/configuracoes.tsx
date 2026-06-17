@@ -191,12 +191,17 @@ function SettingsContent() {
 
   // ---- Field options (Mídia / Origem) ----
   const fieldOptionsQ = useQuery({
-    queryKey: ["field_options"],
+    queryKey: ["field_options_admin"],
     queryFn: async () => {
       const { data } = await supabase.from("field_options").select("*").order("sort_order");
       return data ?? [];
     },
   });
+
+  function invalidateFieldOptions() {
+    qc.invalidateQueries({ queryKey: ["field_options_admin"] });
+    qc.invalidateQueries({ queryKey: ["field_options"] });
+  }
 
   async function addOption(fieldKey: string, value: string) {
     if (!value.trim()) return;
@@ -205,11 +210,11 @@ function SettingsContent() {
       .from("field_options")
       .insert({ field_key: fieldKey, value: value.trim(), sort_order: count });
     if (error) return toast.error(error.message);
-    qc.invalidateQueries({ queryKey: ["field_options"] });
+    invalidateFieldOptions();
   }
   async function removeOption(id: string) {
     await supabase.from("field_options").delete().eq("id", id);
-    qc.invalidateQueries({ queryKey: ["field_options"] });
+    invalidateFieldOptions();
   }
 
   // ---- Custom fields ----
@@ -265,11 +270,15 @@ function SettingsContent() {
   const usersQ = useQuery({
     queryKey: ["profiles"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("id, full_name, email, created_at, user_roles(role)")
-        .order("created_at");
-      return data ?? [];
+      const [profilesR, rolesR] = await Promise.all([
+        supabase.from("profiles").select("id, full_name, email, created_at").order("created_at"),
+        supabase.from("user_roles").select("user_id, role"),
+      ]);
+      const roleByUser = new Map((rolesR.data ?? []).map((r: any) => [r.user_id, r.role]));
+      return (profilesR.data ?? []).map((p: any) => ({
+        ...p,
+        user_roles: roleByUser.has(p.id) ? [{ role: roleByUser.get(p.id) }] : [],
+      }));
     },
   });
 
