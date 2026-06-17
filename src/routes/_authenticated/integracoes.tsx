@@ -23,7 +23,7 @@ function IntegracoesPage() {
   });
 
   const webhookUrl = data
-    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook?token=${data.whatsapp_webhook_token}`
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/bright-action?token=${data.whatsapp_webhook_token}`
     : "";
 
   function copyUrl() {
