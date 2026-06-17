@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -16,6 +17,24 @@ import { supabase } from "@/integrations/supabase/client";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { toast } from "sonner";
 import { Trash2 } from "lucide-react";
+import { useUserRole } from "@/hooks/use-user-role";
+
+interface CustomField {
+  key: string;
+  label: string;
+  field_type: "text" | "number" | "boolean" | "select";
+  options: string[];
+}
+
+function toDatetimeLocal(iso: string | null | undefined) {
+  const d = iso ? new Date(iso) : new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function fromDatetimeLocal(value: string) {
+  return new Date(value).toISOString();
+}
 
 const STAGES = [
   { id: "novo", label: "🆕 Novo Lead" },
@@ -48,26 +67,62 @@ export function LeadModal({
   onSaved: () => void;
 }) {
   const isNew = !lead;
+  const { isAdmin } = useUserRole();
   const [form, setForm] = useState<Partial<Lead>>(() => ({
     name: "",
     phone: "",
-    origin: "organico",
+    origin: "",
+    media: "",
     service: "outros",
     urgent: false,
     budget_amount: null,
     stage: "novo",
-    entry_date: new Date().toISOString().slice(0, 10),
+    entry_date: new Date().toISOString(),
     appointment_date: null,
     financing: null,
     checklist: {},
     notes: "",
     history: [],
+    calls_made: 0,
+    calls_answered: 0,
+    custom_data: {},
     ...lead,
   }));
   const [newNote, setNewNote] = useState("");
 
+  const { data: options } = useQuery({
+    queryKey: ["field_options"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("field_options")
+        .select("field_key,value")
+        .order("sort_order");
+      const midia = (data ?? []).filter((o) => o.field_key === "midia").map((o) => o.value);
+      const origem = (data ?? []).filter((o) => o.field_key === "origem").map((o) => o.value);
+      return { midia, origem };
+    },
+  });
+
+  const { data: customFields = [] } = useQuery({
+    queryKey: ["custom_fields"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("custom_fields")
+        .select("key,label,field_type,options")
+        .order("sort_order");
+      return (data ?? []) as CustomField[];
+    },
+  });
+
   useEffect(() => {
-    if (lead) setForm({ ...lead, checklist: lead.checklist || {}, history: lead.history || [] });
+    if (lead) {
+      setForm({
+        ...lead,
+        checklist: lead.checklist || {},
+        history: lead.history || [],
+        custom_data: lead.custom_data || {},
+      });
+    }
   }, [lead]);
 
   function update<K extends keyof Lead>(key: K, value: Lead[K]) {
@@ -78,12 +133,17 @@ export function LeadModal({
     setForm((f) => ({ ...f, checklist: { ...(f.checklist ?? {}), [key]: val } }));
   }
 
+  function updateCustom(key: string, value: string | number | boolean) {
+    setForm((f) => ({ ...f, custom_data: { ...(f.custom_data ?? {}), [key]: value } }));
+  }
+
   async function save() {
     if (!form.name?.trim()) return toast.error("Nome é obrigatório");
     const payload = {
       name: form.name.trim(),
       phone: form.phone || null,
-      origin: form.origin,
+      origin: form.origin || "",
+      media: form.media || "",
       service: form.service,
       urgent: !!form.urgent,
       budget_amount: form.budget_amount ? Number(form.budget_amount) : null,
@@ -94,6 +154,9 @@ export function LeadModal({
       checklist: form.checklist ?? {},
       notes: form.notes || null,
       history: form.history ?? [],
+      calls_made: Number(form.calls_made) || 0,
+      calls_answered: Number(form.calls_answered) || 0,
+      custom_data: form.custom_data ?? {},
     };
     let error;
     if (isNew) {
@@ -148,7 +211,9 @@ export function LeadModal({
           </Field>
           <Field label="Serviço de interesse">
             <Select value={form.service} onValueChange={(v) => update("service", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="implante">Implante</SelectItem>
                 <SelectItem value="aparelho">Aparelho</SelectItem>
@@ -156,13 +221,31 @@ export function LeadModal({
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Origem">
-            <Select value={form.origin} onValueChange={(v) => update("origin", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+          <Field label="Mídia (de onde veio)">
+            <Select value={form.media || undefined} onValueChange={(v) => update("media", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a mídia" />
+              </SelectTrigger>
               <SelectContent>
-                <SelectItem value="anuncio_meta">Anúncio Meta</SelectItem>
-                <SelectItem value="organico">Orgânico</SelectItem>
-                <SelectItem value="indicacao">Indicação</SelectItem>
+                {(options?.midia ?? []).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </Field>
+          <Field label="Origem (como chegou)">
+            <Select value={form.origin || undefined} onValueChange={(v) => update("origin", v)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a origem" />
+              </SelectTrigger>
+              <SelectContent>
+                {(options?.origem ?? []).map((v) => (
+                  <SelectItem key={v} value={v}>
+                    {v}
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </Field>
@@ -178,19 +261,23 @@ export function LeadModal({
           </Field>
           <Field label="Etapa">
             <Select value={form.stage} onValueChange={(v) => update("stage", v)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 {STAGES.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.label}
+                  </SelectItem>
                 ))}
               </SelectContent>
             </Select>
           </Field>
-          <Field label="Data de entrada">
+          <Field label="Data de criação do lead">
             <Input
-              type="date"
-              value={form.entry_date ?? ""}
-              onChange={(e) => update("entry_date", e.target.value)}
+              type="datetime-local"
+              value={toDatetimeLocal(form.entry_date)}
+              onChange={(e) => update("entry_date", fromDatetimeLocal(e.target.value))}
             />
           </Field>
           <Field label="Data do agendamento">
@@ -205,7 +292,9 @@ export function LeadModal({
               value={form.financing ?? ""}
               onValueChange={(v) => update("financing", v || null)}
             >
-              <SelectTrigger><SelectValue placeholder="—" /></SelectTrigger>
+              <SelectTrigger>
+                <SelectValue placeholder="—" />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="sim">Sim</SelectItem>
                 <SelectItem value="nao">Não</SelectItem>
@@ -219,9 +308,84 @@ export function LeadModal({
               checked={!!form.urgent}
               onCheckedChange={(c) => update("urgent", !!c)}
             />
-            <Label htmlFor="urgent" className="cursor-pointer">Marcar como Urgente</Label>
+            <Label htmlFor="urgent" className="cursor-pointer">
+              Marcar como Urgente
+            </Label>
           </div>
         </div>
+
+        <div className="mt-6">
+          <h4 className="text-sm font-semibold mb-3">Ligações</h4>
+          <div className="grid grid-cols-2 gap-4 max-w-md">
+            <Field label="Ligações feitas">
+              <Input
+                type="number"
+                min={0}
+                value={form.calls_made ?? 0}
+                onChange={(e) => update("calls_made", Number(e.target.value) || 0)}
+              />
+            </Field>
+            <Field label="Ligações atendidas">
+              <Input
+                type="number"
+                min={0}
+                value={form.calls_answered ?? 0}
+                onChange={(e) => update("calls_answered", Number(e.target.value) || 0)}
+              />
+            </Field>
+          </div>
+        </div>
+
+        {customFields.length > 0 && (
+          <div className="mt-6">
+            <h4 className="text-sm font-semibold mb-3">Campos personalizados</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {customFields.map((cf) => (
+                <Field key={cf.key} label={cf.label}>
+                  {cf.field_type === "boolean" ? (
+                    <div className="flex items-center gap-2 pt-1">
+                      <Checkbox
+                        id={`cf-${cf.key}`}
+                        checked={!!form.custom_data?.[cf.key]}
+                        onCheckedChange={(v) => updateCustom(cf.key, !!v)}
+                      />
+                      <Label htmlFor={`cf-${cf.key}`} className="text-sm cursor-pointer">
+                        Sim
+                      </Label>
+                    </div>
+                  ) : cf.field_type === "select" ? (
+                    <Select
+                      value={(form.custom_data?.[cf.key] as string) || undefined}
+                      onValueChange={(v) => updateCustom(cf.key, v)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {cf.options.map((o) => (
+                          <SelectItem key={o} value={o}>
+                            {o}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      type={cf.field_type === "number" ? "number" : "text"}
+                      value={(form.custom_data?.[cf.key] as string | number) ?? ""}
+                      onChange={(e) =>
+                        updateCustom(
+                          cf.key,
+                          cf.field_type === "number" ? Number(e.target.value) || 0 : e.target.value,
+                        )
+                      }
+                    />
+                  )}
+                </Field>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="mt-6">
           <h4 className="text-sm font-semibold mb-3">Checklist de etapas</h4>
@@ -233,7 +397,9 @@ export function LeadModal({
                   checked={!!form.checklist?.[c.key]}
                   onCheckedChange={(v) => toggleCheck(c.key, !!v)}
                 />
-                <Label htmlFor={c.key} className="text-sm cursor-pointer">{c.label}</Label>
+                <Label htmlFor={c.key} className="text-sm cursor-pointer">
+                  {c.label}
+                </Label>
               </div>
             ))}
           </div>
@@ -248,7 +414,9 @@ export function LeadModal({
               placeholder="Adicionar nota..."
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addNote())}
             />
-            <Button type="button" variant="secondary" onClick={addNote}>Adicionar</Button>
+            <Button type="button" variant="secondary" onClick={addNote}>
+              Adicionar
+            </Button>
           </div>
           <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
             {(form.history ?? []).map((h, i) => (
@@ -269,13 +437,21 @@ export function LeadModal({
         </div>
 
         <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
-          {!isNew ? (
-            <Button variant="ghost" onClick={remove} className="text-destructive hover:text-destructive">
+          {!isNew && isAdmin ? (
+            <Button
+              variant="ghost"
+              onClick={remove}
+              className="text-destructive hover:text-destructive"
+            >
               <Trash2 className="h-4 w-4 mr-2" /> Excluir
             </Button>
-          ) : <div />}
+          ) : (
+            <div />
+          )}
           <div className="flex gap-2">
-            <Button variant="secondary" onClick={onClose}>Cancelar</Button>
+            <Button variant="secondary" onClick={onClose}>
+              Cancelar
+            </Button>
             <Button onClick={save}>Salvar</Button>
           </div>
         </div>

@@ -47,17 +47,14 @@ function StatsPage() {
   const { data } = useQuery({
     queryKey: ["stats"],
     queryFn: async () => {
-      const [leadsR, callsR] = await Promise.all([
-        supabase.from("leads").select("*"),
-        supabase.from("daily_calls").select("*"),
-      ]);
-      return { leads: leadsR.data ?? [], calls: callsR.data ?? [] };
+      const leadsR = await supabase.from("leads").select("*");
+      return { leads: leadsR.data ?? [] };
     },
   });
 
   const start = rangeStart(range);
   const leads = (data?.leads ?? []).filter((l: any) => new Date(l.entry_date) >= start);
-  const calls = (data?.calls ?? []).filter((c: any) => new Date(c.date) >= start);
+  const entryDay = (l: any) => l.entry_date.slice(0, 10);
 
   const series = useMemo(() => {
     const days: Record<string, { date: string; leads: number; agend: number; vendas: number }> = {};
@@ -67,7 +64,7 @@ function StatsPage() {
       days[k] = { date: k, leads: 0, agend: 0, vendas: 0 };
     }
     leads.forEach((l: any) => {
-      const k = l.entry_date;
+      const k = entryDay(l);
       if (days[k]) days[k].leads++;
       if (l.appointment_date && days[l.appointment_date]) days[l.appointment_date].agend++;
       if (l.stage === "fechado" && days[k]) days[k].vendas++;
@@ -80,10 +77,19 @@ function StatsPage() {
 
   // Funnel
   const total = leads.length;
-  const contato = leads.filter((l: any) => l.checklist?.primeiro_contato || ["contato","agendado","orcamento","followup","fechado"].includes(l.stage)).length;
-  const agendado = leads.filter((l: any) => l.appointment_date || ["agendado","orcamento","followup","fechado"].includes(l.stage)).length;
+  const contato = leads.filter(
+    (l: any) =>
+      l.checklist?.primeiro_contato ||
+      ["contato", "agendado", "orcamento", "followup", "fechado"].includes(l.stage),
+  ).length;
+  const agendado = leads.filter(
+    (l: any) =>
+      l.appointment_date || ["agendado", "orcamento", "followup", "fechado"].includes(l.stage),
+  ).length;
   const avaliacao = leads.filter((l: any) => l.checklist?.avaliacao_realizada).length;
-  const orcamento = leads.filter((l: any) => l.checklist?.orcamento_apresentado || ["orcamento","fechado"].includes(l.stage)).length;
+  const orcamento = leads.filter(
+    (l: any) => l.checklist?.orcamento_apresentado || ["orcamento", "fechado"].includes(l.stage),
+  ).length;
   const venda = leads.filter((l: any) => l.stage === "fechado").length;
 
   const funnel = [
@@ -101,22 +107,31 @@ function StatsPage() {
     aparelho: { count: 0, revenue: 0 },
     outros: { count: 0, revenue: 0 },
   };
-  leads.filter((l: any) => l.stage === "fechado").forEach((l: any) => {
-    svcMap[l.service] = svcMap[l.service] || { count: 0, revenue: 0 };
-    svcMap[l.service].count++;
-    svcMap[l.service].revenue += Number(l.budget_amount || 0);
-  });
+  leads
+    .filter((l: any) => l.stage === "fechado")
+    .forEach((l: any) => {
+      svcMap[l.service] = svcMap[l.service] || { count: 0, revenue: 0 };
+      svcMap[l.service].count++;
+      svcMap[l.service].revenue += Number(l.budget_amount || 0);
+    });
   const svcData = Object.entries(svcMap).map(([k, v]) => ({
     name: k === "implante" ? "Implante" : k === "aparelho" ? "Aparelho" : "Outros",
     count: v.count,
     revenue: v.revenue,
   }));
 
-  // Calls
-  const callsData = calls
-    .sort((a: any, b: any) => a.date.localeCompare(b.date))
-    .map((c: any) => ({
-      label: new Date(c.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
+  // Calls (agregadas por dia a partir dos leads)
+  const callsByDay: Record<string, { calls_made: number; calls_answered: number }> = {};
+  leads.forEach((l: any) => {
+    const k = entryDay(l);
+    if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
+    callsByDay[k].calls_made += l.calls_made || 0;
+    callsByDay[k].calls_answered += l.calls_answered || 0;
+  });
+  const callsData = Object.entries(callsByDay)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, c]) => ({
+      label: new Date(date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
       feitas: c.calls_made,
       atendidas: c.calls_answered,
     }));
@@ -144,10 +159,16 @@ function StatsPage() {
                 "px-3 py-1.5 text-xs rounded-md font-medium transition-colors",
                 range === r
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+                  : "text-muted-foreground hover:text-foreground",
               )}
             >
-              {r === "today" ? "Hoje" : r === "7d" ? "7 dias" : r === "30d" ? "30 dias" : "Este mês"}
+              {r === "today"
+                ? "Hoje"
+                : r === "7d"
+                  ? "7 dias"
+                  : r === "30d"
+                    ? "30 dias"
+                    : "Este mês"}
             </button>
           ))}
         </div>
@@ -162,8 +183,20 @@ function StatsPage() {
             <Tooltip contentStyle={tooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
             <Line type="monotone" dataKey="leads" stroke="#94A3B8" strokeWidth={2} name="Leads" />
-            <Line type="monotone" dataKey="agend" stroke="#0EA5E9" strokeWidth={2} name="Agendamentos" />
-            <Line type="monotone" dataKey="vendas" stroke="#2563EB" strokeWidth={2.5} name="Vendas" />
+            <Line
+              type="monotone"
+              dataKey="agend"
+              stroke="#0EA5E9"
+              strokeWidth={2}
+              name="Agendamentos"
+            />
+            <Line
+              type="monotone"
+              dataKey="vendas"
+              stroke="#2563EB"
+              strokeWidth={2.5}
+              name="Vendas"
+            />
           </LineChart>
         </ResponsiveContainer>
       </Card>
@@ -182,9 +215,7 @@ function StatsPage() {
                     className="h-full bg-gradient-to-r from-primary to-primary/70 flex items-center px-3"
                     style={{ width: `${width}%` }}
                   >
-                    <span className="text-sm font-semibold text-primary-foreground">
-                      {f.value}
-                    </span>
+                    <span className="text-sm font-semibold text-primary-foreground">{f.value}</span>
                   </div>
                 </div>
                 <div className="w-16 text-right text-xs text-muted-foreground">

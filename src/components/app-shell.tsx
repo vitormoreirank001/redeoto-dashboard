@@ -1,22 +1,42 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, KanbanSquare, LineChart, Settings, Plug, LogOut } from "lucide-react";
+import { LayoutDashboard, KanbanSquare, LineChart, Settings, LogOut } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
+import { useUserRole } from "@/hooks/use-user-role";
 
 const navItems = [
-  { to: "/dashboard", label: "Dashboard", shortLabel: "Início", icon: LayoutDashboard },
-  { to: "/crm", label: "CRM", shortLabel: "CRM", icon: KanbanSquare },
-  { to: "/estatisticas", label: "Estatísticas", shortLabel: "Stats", icon: LineChart },
-  { to: "/integracoes", label: "Integrações", shortLabel: "Integr.", icon: Plug },
-  { to: "/configuracoes", label: "Configurações", shortLabel: "Config", icon: Settings },
+  {
+    to: "/dashboard",
+    label: "Dashboard",
+    shortLabel: "Início",
+    icon: LayoutDashboard,
+    adminOnly: false,
+  },
+  { to: "/crm", label: "CRM", shortLabel: "CRM", icon: KanbanSquare, adminOnly: false },
+  {
+    to: "/estatisticas",
+    label: "Estatísticas",
+    shortLabel: "Stats",
+    icon: LineChart,
+    adminOnly: false,
+  },
+  {
+    to: "/configuracoes",
+    label: "Configurações",
+    shortLabel: "Config",
+    icon: Settings,
+    adminOnly: true,
+  },
 ] as const;
 
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const { isAdmin } = useUserRole();
+  const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
@@ -60,13 +80,11 @@ export function AppShell({ children }: { children: ReactNode }) {
               <span className="text-sidebar-foreground">Dentista</span>
             </h1>
           )}
-          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">
-            Painel
-          </p>
+          <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">Painel</p>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
-          {navItems.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             const active = pathname === item.to || pathname.startsWith(item.to + "/");
             return (
@@ -77,7 +95,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                   active
                     ? "bg-primary text-primary-foreground shadow-md shadow-primary/20"
-                    : "text-sidebar-foreground hover:bg-secondary"
+                    : "text-sidebar-foreground hover:bg-secondary",
                 )}
               >
                 <Icon className="h-[18px] w-[18px]" strokeWidth={1.75} />
@@ -130,7 +148,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
       {/* Navegação inferior fixa no celular/tablet */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch bg-sidebar border-t border-sidebar-border">
-        {navItems.map((item) => {
+        {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || pathname.startsWith(item.to + "/");
           return (
@@ -139,7 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
               to={item.to}
               className={cn(
                 "flex-1 flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors",
-                active ? "text-primary" : "text-muted-foreground"
+                active ? "text-primary" : "text-muted-foreground",
               )}
             >
               <Icon className="h-5 w-5" strokeWidth={1.75} />

@@ -4,10 +4,30 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { formatBRL } from "@/lib/date-ranges";
-import { Plus, Trash2, Phone, Image as ImageIcon } from "lucide-react";
+import { getTheme, setTheme as persistTheme, type Theme } from "@/lib/theme";
+import {
+  Plus,
+  Trash2,
+  Image as ImageIcon,
+  Moon,
+  ListPlus,
+  SlidersHorizontal,
+  UserPlus,
+  MessageCircle,
+  Copy,
+  ShieldAlert,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -16,17 +36,50 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useUserRole } from "@/hooks/use-user-role";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   component: SettingsPage,
 });
 
 const MONTHS = [
-  "Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho",
-  "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro",
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
 ];
 
 function SettingsPage() {
+  const { isAdmin, isLoading: roleLoading } = useUserRole();
+
+  if (roleLoading) return null;
+
+  if (!isAdmin) {
+    return (
+      <div className="p-4 lg:p-6 max-w-5xl mx-auto">
+        <div className="bg-card border border-border rounded-xl shadow-sm p-8 text-center">
+          <ShieldAlert className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+          <h1 className="text-lg font-semibold">Acesso restrito</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Apenas administradores podem acessar Configurações.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return <SettingsContent />;
+}
+
+function SettingsContent() {
   const qc = useQueryClient();
   const now = new Date();
   const Y = now.getFullYear();
@@ -39,7 +92,7 @@ function SettingsPage() {
     queryFn: async () => {
       const { data } = await supabase
         .from("app_settings")
-        .select("logo_url")
+        .select("logo_url,whatsapp_webhook_token,whatsapp_connected_at")
         .eq("id", true)
         .maybeSingle();
       return data;
@@ -66,6 +119,17 @@ function SettingsPage() {
     if (error) return toast.error(error.message);
     toast.success("Logo atualizada");
     qc.invalidateQueries({ queryKey: ["app_settings"] });
+  }
+
+  // ---- Theme ----
+  const [theme, setThemeState] = useState<Theme>("light");
+  useEffect(() => {
+    setThemeState(getTheme());
+  }, []);
+  function toggleTheme(checked: boolean) {
+    const next: Theme = checked ? "dark" : "light";
+    setThemeState(next);
+    persistTheme(next);
   }
 
   // ---- Goal ----
@@ -125,6 +189,78 @@ function SettingsPage() {
     qc.invalidateQueries({ queryKey: ["services"] });
   }
 
+  // ---- Field options (Mídia / Origem) ----
+  const fieldOptionsQ = useQuery({
+    queryKey: ["field_options"],
+    queryFn: async () => {
+      const { data } = await supabase.from("field_options").select("*").order("sort_order");
+      return data ?? [];
+    },
+  });
+
+  async function addOption(fieldKey: string, value: string) {
+    if (!value.trim()) return;
+    const count = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === fieldKey).length;
+    const { error } = await supabase
+      .from("field_options")
+      .insert({ field_key: fieldKey, value: value.trim(), sort_order: count });
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["field_options"] });
+  }
+  async function removeOption(id: string) {
+    await supabase.from("field_options").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["field_options"] });
+  }
+
+  // ---- Custom fields ----
+  const [cfLabel, setCfLabel] = useState("");
+  const [cfType, setCfType] = useState("text");
+  const [cfOptions, setCfOptions] = useState("");
+  const customFieldsQ = useQuery({
+    queryKey: ["custom_fields"],
+    queryFn: async () => {
+      const { data } = await supabase.from("custom_fields").select("*").order("sort_order");
+      return data ?? [];
+    },
+  });
+
+  async function addCustomField() {
+    if (!cfLabel.trim()) return toast.error("Nome do campo obrigatório");
+    const key = cfLabel
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "");
+    const options =
+      cfType === "select"
+        ? cfOptions
+            .split(",")
+            .map((o) => o.trim())
+            .filter(Boolean)
+        : [];
+    const count = (customFieldsQ.data ?? []).length;
+    const { error } = await supabase.from("custom_fields").insert({
+      key,
+      label: cfLabel.trim(),
+      field_type: cfType,
+      options,
+      sort_order: count,
+    });
+    if (error) return toast.error(error.message);
+    setCfLabel("");
+    setCfOptions("");
+    setCfType("text");
+    qc.invalidateQueries({ queryKey: ["custom_fields"] });
+  }
+  async function removeCustomField(id: string) {
+    if (!confirm("Remover campo personalizado? Os dados já salvos nos leads não serão apagados."))
+      return;
+    await supabase.from("custom_fields").delete().eq("id", id);
+    qc.invalidateQueries({ queryKey: ["custom_fields"] });
+  }
+
   // ---- Users ----
   const usersQ = useQuery({
     queryKey: ["profiles"],
@@ -137,27 +273,47 @@ function SettingsPage() {
     },
   });
 
-  // ---- Calls (quick logger) ----
-  const [callDate, setCallDate] = useState(new Date().toISOString().slice(0, 10));
-  const [callMade, setCallMade] = useState("");
-  const [callAns, setCallAns] = useState("");
-  async function saveCalls() {
-    const m = Number(callMade) || 0;
-    const a = Number(callAns) || 0;
-    if (a > m) return toast.error("Atendidas não pode ser maior que feitas");
-    const { error } = await supabase
-      .from("daily_calls")
-      .upsert(
-        { date: callDate, calls_made: m, calls_answered: a },
-        { onConflict: "date" }
-      );
-    if (error) return toast.error(error.message);
-    toast.success("Ligações registradas");
-    setCallMade("");
-    setCallAns("");
-    qc.invalidateQueries({ queryKey: ["dashboard"] });
-    qc.invalidateQueries({ queryKey: ["stats"] });
+  const [newName, setNewName] = useState("");
+  const [newEmail, setNewEmail] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState("comercial");
+  const [creatingUser, setCreatingUser] = useState(false);
+
+  async function createUser() {
+    if (!newName.trim() || !newEmail.trim() || newPassword.length < 6) {
+      return toast.error("Preencha nome, e-mail e uma senha com 6+ caracteres");
+    }
+    setCreatingUser(true);
+    const { data, error } = await supabase.functions.invoke("admin-create-user", {
+      body: {
+        full_name: newName.trim(),
+        email: newEmail.trim(),
+        password: newPassword,
+        role: newRole,
+      },
+    });
+    setCreatingUser(false);
+    if (error || (data as any)?.error) {
+      return toast.error((data as any)?.error || error?.message || "Erro ao criar usuário");
+    }
+    toast.success("Usuário criado");
+    setNewName("");
+    setNewEmail("");
+    setNewPassword("");
+    setNewRole("comercial");
+    qc.invalidateQueries({ queryKey: ["profiles"] });
   }
+
+  const webhookUrl = settingsQ.data
+    ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/whatsapp-webhook?token=${settingsQ.data.whatsapp_webhook_token}`
+    : "";
+  function copyWebhookUrl() {
+    navigator.clipboard.writeText(webhookUrl);
+    toast.success("URL copiada");
+  }
+
+  const midiaOptions = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === "midia");
+  const origemOptions = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === "origem");
 
   return (
     <div className="p-4 lg:p-6 space-y-5 max-w-5xl mx-auto">
@@ -201,6 +357,18 @@ function SettingsPage() {
         </div>
       </Section>
 
+      <Section title="Aparência" icon={<Moon className="h-4 w-4 text-primary" />}>
+        <div className="flex items-center justify-between max-w-sm">
+          <div>
+            <p className="text-sm font-medium">Tema escuro</p>
+            <p className="text-xs text-muted-foreground">
+              Aplica para todos que acessarem deste navegador
+            </p>
+          </div>
+          <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+        </div>
+      </Section>
+
       <Section title="Meta de Faturamento">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[200px]">
@@ -220,9 +388,7 @@ function SettingsPage() {
         </div>
         {!!goalsQ.data?.length && (
           <div className="mt-4">
-            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">
-              Histórico
-            </p>
+            <p className="text-xs uppercase tracking-wider text-muted-foreground mb-2">Histórico</p>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -233,7 +399,9 @@ function SettingsPage() {
               <TableBody>
                 {goalsQ.data.map((g: any) => (
                   <TableRow key={g.id}>
-                    <TableCell>{MONTHS[g.month - 1]}/{g.year}</TableCell>
+                    <TableCell>
+                      {MONTHS[g.month - 1]}/{g.year}
+                    </TableCell>
                     <TableCell className="text-right font-semibold text-primary">
                       {formatBRL(Number(g.target_amount))}
                     </TableCell>
@@ -245,22 +413,96 @@ function SettingsPage() {
         )}
       </Section>
 
-      <Section title="Registrar Ligações do Dia" icon={<Phone className="h-4 w-4 text-primary" />}>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-3 items-end">
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Data</Label>
-            <Input type="date" value={callDate} onChange={(e) => setCallDate(e.target.value)} className="mt-1.5" />
-          </div>
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Feitas</Label>
-            <Input type="number" value={callMade} onChange={(e) => setCallMade(e.target.value)} className="mt-1.5" />
-          </div>
-          <div>
-            <Label className="text-xs uppercase tracking-wider text-muted-foreground">Atendidas</Label>
-            <Input type="number" value={callAns} onChange={(e) => setCallAns(e.target.value)} className="mt-1.5" />
-          </div>
-          <Button onClick={saveCalls}>Registrar</Button>
+      <Section title="Mídia" icon={<ListPlus className="h-4 w-4 text-primary" />}>
+        <p className="text-xs text-muted-foreground mb-3">
+          Canais disponíveis para o campo "Mídia" no card do lead (Instagram, Facebook...).
+        </p>
+        <OptionList
+          fieldKey="midia"
+          options={midiaOptions}
+          onAdd={(v) => addOption("midia", v)}
+          onRemove={removeOption}
+        />
+      </Section>
+
+      <Section title="Origem" icon={<ListPlus className="h-4 w-4 text-primary" />}>
+        <p className="text-xs text-muted-foreground mb-3">
+          Como o lead chegou até a clínica (WhatsApp, Formulário, Fluxo de loja...).
+        </p>
+        <OptionList
+          fieldKey="origem"
+          options={origemOptions}
+          onAdd={(v) => addOption("origem", v)}
+          onRemove={removeOption}
+        />
+      </Section>
+
+      <Section
+        title="Campos personalizados"
+        icon={<SlidersHorizontal className="h-4 w-4 text-primary" />}
+      >
+        <p className="text-xs text-muted-foreground mb-3">
+          Campos extras exibidos no card do lead. Crie quantos precisar.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_140px_1fr_auto] gap-3 mb-4">
+          <Input
+            placeholder="Nome do campo (ex: Plano de saúde)"
+            value={cfLabel}
+            onChange={(e) => setCfLabel(e.target.value)}
+          />
+          <Select value={cfType} onValueChange={setCfType}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="text">Texto</SelectItem>
+              <SelectItem value="number">Número</SelectItem>
+              <SelectItem value="boolean">Sim/Não</SelectItem>
+              <SelectItem value="select">Lista de opções</SelectItem>
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Opções separadas por vírgula (se Lista)"
+            value={cfOptions}
+            onChange={(e) => setCfOptions(e.target.value)}
+            disabled={cfType !== "select"}
+          />
+          <Button onClick={addCustomField}>
+            <Plus className="h-4 w-4 mr-2" /> Adicionar
+          </Button>
         </div>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Campo</TableHead>
+              <TableHead>Tipo</TableHead>
+              <TableHead className="w-12"></TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {(customFieldsQ.data ?? []).map((f: any) => (
+              <TableRow key={f.id}>
+                <TableCell className="font-medium">{f.label}</TableCell>
+                <TableCell className="text-muted-foreground capitalize">{f.field_type}</TableCell>
+                <TableCell>
+                  <button
+                    onClick={() => removeCustomField(f.id)}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </TableCell>
+              </TableRow>
+            ))}
+            {!customFieldsQ.data?.length && (
+              <TableRow>
+                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
+                  Nenhum campo personalizado.
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
       </Section>
 
       <Section title="Usuários">
@@ -286,9 +528,43 @@ function SettingsPage() {
             ))}
           </TableBody>
         </Table>
-        <p className="text-xs text-muted-foreground mt-3">
-          Para adicionar um novo usuário, peça que ele se cadastre na tela de login.
-        </p>
+
+        <div className="mt-5 pt-4 border-t border-border">
+          <p className="text-sm font-medium mb-3 flex items-center gap-2">
+            <UserPlus className="h-4 w-4 text-primary" /> Novo usuário
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-[1fr_1fr_1fr_140px_auto] gap-3">
+            <Input
+              placeholder="Nome completo"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+            />
+            <Input
+              type="email"
+              placeholder="E-mail"
+              value={newEmail}
+              onChange={(e) => setNewEmail(e.target.value)}
+            />
+            <Input
+              type="password"
+              placeholder="Senha provisória"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <Select value={newRole} onValueChange={setNewRole}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="comercial">Comercial</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={createUser} disabled={creatingUser}>
+              {creatingUser ? "Criando..." : "Criar"}
+            </Button>
+          </div>
+        </div>
       </Section>
 
       <Section title="Serviços">
@@ -341,6 +617,106 @@ function SettingsPage() {
           </TableBody>
         </Table>
       </Section>
+
+      <Section title="Integrações" icon={<MessageCircle className="h-4 w-4 text-primary" />}>
+        <div className="flex items-start gap-3">
+          <div className="h-10 w-10 rounded-xl bg-success/15 text-success flex items-center justify-center shrink-0">
+            <MessageCircle className="h-5 w-5" />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <h3 className="font-semibold text-sm">WhatsApp — Redeoto</h3>
+              <span
+                className={
+                  settingsQ.data?.whatsapp_connected_at
+                    ? "text-xs px-2 py-0.5 rounded-full bg-success/15 text-success font-medium"
+                    : "text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium"
+                }
+              >
+                {settingsQ.data?.whatsapp_connected_at
+                  ? "Conectado"
+                  : "Aguardando primeira mensagem"}
+              </span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              Envie essa URL para a agência configurar o webhook da integração de WhatsApp.
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <code className="flex-1 text-xs bg-background border border-border rounded-lg px-3 py-2 truncate">
+                {webhookUrl || "Gerando..."}
+              </code>
+              <Button size="sm" variant="outline" onClick={copyWebhookUrl} disabled={!webhookUrl}>
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+            {settingsQ.data?.whatsapp_connected_at && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Último evento recebido:{" "}
+                {new Date(settingsQ.data.whatsapp_connected_at).toLocaleString("pt-BR")}
+              </p>
+            )}
+          </div>
+        </div>
+      </Section>
+    </div>
+  );
+}
+
+function OptionList({
+  options,
+  onAdd,
+  onRemove,
+}: {
+  fieldKey: string;
+  options: { id: string; value: string }[];
+  onAdd: (value: string) => void;
+  onRemove: (id: string) => void;
+}) {
+  const [value, setValue] = useState("");
+  return (
+    <div>
+      <div className="flex gap-2 mb-3">
+        <Input
+          placeholder="Adicionar opção..."
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              onAdd(value);
+              setValue("");
+            }
+          }}
+        />
+        <Button
+          variant="secondary"
+          onClick={() => {
+            onAdd(value);
+            setValue("");
+          }}
+        >
+          Adicionar
+        </Button>
+      </div>
+      <div className="flex flex-wrap gap-2">
+        {options.map((o) => (
+          <span
+            key={o.id}
+            className="flex items-center gap-1.5 text-xs px-2.5 py-1 rounded-full bg-secondary text-foreground"
+          >
+            {o.value}
+            <button
+              onClick={() => onRemove(o.id)}
+              className="text-muted-foreground hover:text-destructive"
+            >
+              <Trash2 className="h-3 w-3" />
+            </button>
+          </span>
+        ))}
+        {!options.length && (
+          <span className="text-xs text-muted-foreground">Nenhuma opção cadastrada.</span>
+        )}
+      </div>
     </div>
   );
 }

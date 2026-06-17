@@ -5,6 +5,7 @@ import { MetricCard } from "@/components/metric-card";
 import {
   Users,
   Calendar,
+  CalendarCheck,
   ClipboardCheck,
   FileText,
   CheckCircle2,
@@ -39,6 +40,8 @@ interface Lead {
   budget_amount: number | null;
   checklist: Record<string, boolean> | null;
   updated_at: string;
+  calls_made: number;
+  calls_answered: number;
 }
 
 const SLA_MS: Record<string, number> = {
@@ -50,11 +53,6 @@ function isOverdue(lead: Lead) {
   const sla = SLA_MS[lead.stage];
   if (!sla) return false;
   return Date.now() - new Date(lead.updated_at).getTime() > sla;
-}
-interface Call {
-  date: string;
-  calls_made: number;
-  calls_answered: number;
 }
 
 function countBetween(items: { date: string }[], start: string, end: string) {
@@ -78,11 +76,12 @@ function DashboardPage() {
   const { data } = useQuery({
     queryKey: ["dashboard"],
     queryFn: async () => {
-      const [leadsR, callsR, goalR] = await Promise.all([
+      const [leadsR, goalR] = await Promise.all([
         supabase
           .from("leads")
-          .select("entry_date,appointment_date,stage,budget_amount,checklist,updated_at"),
-        supabase.from("daily_calls").select("date,calls_made,calls_answered"),
+          .select(
+            "entry_date,appointment_date,stage,budget_amount,checklist,updated_at,calls_made,calls_answered",
+          ),
         supabase
           .from("monthly_goals")
           .select("target_amount")
@@ -92,7 +91,6 @@ function DashboardPage() {
       ]);
       return {
         leads: (leadsR.data ?? []) as Lead[],
-        calls: (callsR.data ?? []) as Call[],
         goal: goalR.data?.target_amount ?? 0,
       };
     },
@@ -105,25 +103,29 @@ function DashboardPage() {
   const me = monthEndISO();
 
   const leads = data?.leads ?? [];
-  const calls = data?.calls ?? [];
+  const entryDay = (l: Lead) => l.entry_date.slice(0, 10);
 
-  const leadsByDate = leads.map((l) => ({ date: l.entry_date }));
+  const leadsByDate = leads.map((l) => ({ date: entryDay(l) }));
   const apptByDate = leads
     .filter((l) => l.appointment_date)
     .map((l) => ({ date: l.appointment_date! }));
   const evalByDate = leads
     .filter((l) => (l.checklist as Record<string, boolean>)?.avaliacao_realizada)
-    .map((l) => ({ date: l.entry_date }));
+    .map((l) => ({ date: entryDay(l) }));
   const quoteByDate = leads
     .filter((l) => (l.checklist as Record<string, boolean>)?.orcamento_apresentado)
-    .map((l) => ({ date: l.entry_date }));
-  const salesByDate = leads.filter((l) => l.stage === "fechado").map((l) => ({ date: l.entry_date }));
+    .map((l) => ({ date: entryDay(l) }));
+  const salesByDate = leads
+    .filter((l) => l.stage === "fechado")
+    .map((l) => ({ date: entryDay(l) }));
+
+  const apptToday = leads.filter((l) => l.appointment_date === t).length;
 
   const sumCalls = (k: "calls_made" | "calls_answered", s: string, e: string) =>
-    calls.filter((c) => c.date >= s && c.date <= e).reduce((a, c) => a + (c[k] || 0), 0);
+    leads.filter((l) => entryDay(l) >= s && entryDay(l) <= e).reduce((a, l) => a + (l[k] || 0), 0);
 
   const revenueMonth = leads
-    .filter((l) => l.stage === "fechado" && l.entry_date >= ms && l.entry_date <= me)
+    .filter((l) => l.stage === "fechado" && entryDay(l) >= ms && entryDay(l) <= me)
     .reduce((a, l) => a + Number(l.budget_amount || 0), 0);
 
   const goal = data?.goal ?? 0;
@@ -146,7 +148,7 @@ function DashboardPage() {
         </p>
       </header>
 
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2 rounded-2xl bg-card border-2 border-primary/50 shadow-sm p-5 relative overflow-hidden">
           <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
           <div className="relative">
@@ -184,7 +186,7 @@ function DashboardPage() {
             "rounded-2xl border-2 shadow-sm p-5 flex flex-col justify-between transition-colors",
             overdueCount > 0
               ? "bg-destructive/5 border-destructive/40 hover:border-destructive"
-              : "bg-card border-border hover:border-primary/40"
+              : "bg-card border-border hover:border-primary/40",
           )}
         >
           <div className="flex items-start justify-between">
@@ -192,7 +194,9 @@ function DashboardPage() {
             <div
               className={cn(
                 "h-9 w-9 rounded-lg flex items-center justify-center",
-                overdueCount > 0 ? "bg-destructive/15 text-destructive" : "bg-secondary text-muted-foreground"
+                overdueCount > 0
+                  ? "bg-destructive/15 text-destructive"
+                  : "bg-secondary text-muted-foreground",
               )}
             >
               <AlertTriangle className="h-4 w-4" />
@@ -202,22 +206,60 @@ function DashboardPage() {
             <p
               className={cn(
                 "text-4xl font-extrabold mt-1",
-                overdueCount > 0 ? "text-destructive" : "text-foreground"
+                overdueCount > 0 ? "text-destructive" : "text-foreground",
               )}
             >
               {overdueCount}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {overdueCount > 0 ? "Sem contato dentro do prazo — ver no CRM" : "Tudo dentro do prazo"}
+              {overdueCount > 0
+                ? "Sem contato dentro do prazo — ver no CRM"
+                : "Tudo dentro do prazo"}
             </p>
           </div>
         </Link>
+
+        <div
+          className={cn(
+            "rounded-2xl border-2 shadow-sm p-5 flex flex-col justify-between transition-colors",
+            apptToday > 0 ? "bg-success/5 border-success/40" : "bg-card border-border",
+          )}
+        >
+          <div className="flex items-start justify-between">
+            <p className="text-sm text-muted-foreground">Agendamentos hoje</p>
+            <div
+              className={cn(
+                "h-9 w-9 rounded-lg flex items-center justify-center",
+                apptToday > 0
+                  ? "bg-success/15 text-[#16A34A]"
+                  : "bg-secondary text-muted-foreground",
+              )}
+            >
+              <CalendarCheck className="h-4 w-4" />
+            </div>
+          </div>
+          <div>
+            <p
+              className={cn(
+                "text-4xl font-extrabold mt-1",
+                apptToday > 0 ? "text-[#16A34A]" : "text-foreground",
+              )}
+            >
+              {apptToday}
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">
+              {apptToday > 0 ? "Paciente(s) agendado(s) para hoje" : "Nenhum agendamento para hoje"}
+            </p>
+          </div>
+        </div>
       </section>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         <MetricCard
           title="Leads"
           icon={Users}
+          size="lg"
+          className="col-span-2"
           today={countBetween(leadsByDate, t, t)}
           yesterday={countBetween(leadsByDate, y, y)}
           week={countBetween(leadsByDate, ws, t)}
@@ -226,6 +268,8 @@ function DashboardPage() {
         <MetricCard
           title="Agendamentos"
           icon={Calendar}
+          size="lg"
+          className="col-span-2"
           today={countBetween(apptByDate, t, t)}
           yesterday={countBetween(apptByDate, y, y)}
           week={countBetween(apptByDate, ws, t)}

@@ -12,7 +12,6 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedIntegracoesRouteImport } from './routes/_authenticated/integracoes'
 import { Route as AuthenticatedEstatisticasRouteImport } from './routes/_authenticated/estatisticas'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedCrmRouteImport } from './routes/_authenticated/crm'
@@ -32,12 +31,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedIntegracoesRoute =
-  AuthenticatedIntegracoesRouteImport.update({
-    id: '/integracoes',
-    path: '/integracoes',
-    getParentRoute: () => AuthenticatedRouteRoute,
-  } as any)
 const AuthenticatedEstatisticasRoute =
   AuthenticatedEstatisticasRouteImport.update({
     id: '/estatisticas',
@@ -68,7 +61,6 @@ export interface FileRoutesByFullPath {
   '/crm': typeof AuthenticatedCrmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/estatisticas': typeof AuthenticatedEstatisticasRoute
-  '/integracoes': typeof AuthenticatedIntegracoesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -77,7 +69,6 @@ export interface FileRoutesByTo {
   '/crm': typeof AuthenticatedCrmRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/estatisticas': typeof AuthenticatedEstatisticasRoute
-  '/integracoes': typeof AuthenticatedIntegracoesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -88,7 +79,6 @@ export interface FileRoutesById {
   '/_authenticated/crm': typeof AuthenticatedCrmRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/estatisticas': typeof AuthenticatedEstatisticasRoute
-  '/_authenticated/integracoes': typeof AuthenticatedIntegracoesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -99,7 +89,6 @@ export interface FileRouteTypes {
     | '/crm'
     | '/dashboard'
     | '/estatisticas'
-    | '/integracoes'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -108,7 +97,6 @@ export interface FileRouteTypes {
     | '/crm'
     | '/dashboard'
     | '/estatisticas'
-    | '/integracoes'
   id:
     | '__root__'
     | '/'
@@ -118,7 +106,6 @@ export interface FileRouteTypes {
     | '/_authenticated/crm'
     | '/_authenticated/dashboard'
     | '/_authenticated/estatisticas'
-    | '/_authenticated/integracoes'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -149,13 +136,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/_authenticated/integracoes': {
-      id: '/_authenticated/integracoes'
-      path: '/integracoes'
-      fullPath: '/integracoes'
-      preLoaderRoute: typeof AuthenticatedIntegracoesRouteImport
-      parentRoute: typeof AuthenticatedRouteRoute
     }
     '/_authenticated/estatisticas': {
       id: '/_authenticated/estatisticas'
@@ -193,7 +173,6 @@ interface AuthenticatedRouteRouteChildren {
   AuthenticatedCrmRoute: typeof AuthenticatedCrmRoute
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedEstatisticasRoute: typeof AuthenticatedEstatisticasRoute
-  AuthenticatedIntegracoesRoute: typeof AuthenticatedIntegracoesRoute
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
@@ -201,7 +180,6 @@ const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedCrmRoute: AuthenticatedCrmRoute,
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedEstatisticasRoute: AuthenticatedEstatisticasRoute,
-  AuthenticatedIntegracoesRoute: AuthenticatedIntegracoesRoute,
 }
 
 const AuthenticatedRouteRouteWithChildren =
