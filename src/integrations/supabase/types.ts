@@ -14,16 +14,192 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      daily_calls: {
+        Row: {
+          calls_answered: number
+          calls_made: number
+          created_at: string
+          date: string
+          id: string
+        }
+        Insert: {
+          calls_answered?: number
+          calls_made?: number
+          created_at?: string
+          date: string
+          id?: string
+        }
+        Update: {
+          calls_answered?: number
+          calls_made?: number
+          created_at?: string
+          date?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      leads: {
+        Row: {
+          appointment_date: string | null
+          budget_amount: number | null
+          checklist: Json
+          created_at: string
+          created_by: string | null
+          entry_date: string
+          financing: string | null
+          history: Json
+          id: string
+          name: string
+          notes: string | null
+          origin: string
+          phone: string | null
+          service: string
+          stage: string
+          updated_at: string
+          urgent: boolean
+        }
+        Insert: {
+          appointment_date?: string | null
+          budget_amount?: number | null
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          financing?: string | null
+          history?: Json
+          id?: string
+          name: string
+          notes?: string | null
+          origin?: string
+          phone?: string | null
+          service?: string
+          stage?: string
+          updated_at?: string
+          urgent?: boolean
+        }
+        Update: {
+          appointment_date?: string | null
+          budget_amount?: number | null
+          checklist?: Json
+          created_at?: string
+          created_by?: string | null
+          entry_date?: string
+          financing?: string | null
+          history?: Json
+          id?: string
+          name?: string
+          notes?: string | null
+          origin?: string
+          phone?: string | null
+          service?: string
+          stage?: string
+          updated_at?: string
+          urgent?: boolean
+        }
+        Relationships: []
+      }
+      monthly_goals: {
+        Row: {
+          created_at: string
+          id: string
+          month: number
+          target_amount: number
+          year: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          month: number
+          target_amount?: number
+          year: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          month?: number
+          target_amount?: number
+          year?: number
+        }
+        Relationships: []
+      }
+      profiles: {
+        Row: {
+          created_at: string
+          email: string | null
+          full_name: string
+          id: string
+        }
+        Insert: {
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id: string
+        }
+        Update: {
+          created_at?: string
+          email?: string | null
+          full_name?: string
+          id?: string
+        }
+        Relationships: []
+      }
+      services: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          reference_price: number
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          reference_price?: number
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          reference_price?: number
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
-      [_ in never]: never
+      app_role: "admin" | "comercial"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -150,6 +326,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["admin", "comercial"],
+    },
   },
 } as const
