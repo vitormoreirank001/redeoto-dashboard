@@ -66,7 +66,8 @@ function StatsPage() {
     leads.forEach((l: any) => {
       const k = entryDay(l);
       if (days[k]) days[k].leads++;
-      if (l.appointment_date && days[l.appointment_date]) days[l.appointment_date].agend++;
+      const apptDay = l.appointment_date?.slice(0, 10);
+      if (apptDay && days[apptDay]) days[apptDay].agend++;
       if (l.stage === "fechado" && days[k]) days[k].vendas++;
     });
     return Object.values(days).map((d) => ({

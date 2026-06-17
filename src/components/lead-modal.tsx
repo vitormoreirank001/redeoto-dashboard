@@ -59,10 +59,12 @@ const CHECKLIST = [
 
 export function LeadModal({
   lead,
+  initial,
   onClose,
   onSaved,
 }: {
   lead: Lead | null;
+  initial?: Partial<Lead>;
   onClose: () => void;
   onSaved: () => void;
 }) {
@@ -86,6 +88,7 @@ export function LeadModal({
     calls_made: 0,
     calls_answered: 0,
     custom_data: {},
+    ...initial,
     ...lead,
   }));
   const [newNote, setNewNote] = useState("");
@@ -282,9 +285,14 @@ export function LeadModal({
           </Field>
           <Field label="Data do agendamento">
             <Input
-              type="date"
-              value={form.appointment_date ?? ""}
-              onChange={(e) => update("appointment_date", e.target.value || null)}
+              type="datetime-local"
+              value={form.appointment_date ? toDatetimeLocal(form.appointment_date) : ""}
+              onChange={(e) =>
+                update(
+                  "appointment_date",
+                  e.target.value ? fromDatetimeLocal(e.target.value) : null,
+                )
+              }
             />
           </Field>
           <Field label="Financiamento?">

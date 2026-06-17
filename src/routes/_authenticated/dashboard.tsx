@@ -96,6 +96,25 @@ function DashboardPage() {
     },
   });
 
+  const { data: inventoryAlerts } = useQuery({
+    queryKey: ["inventory_alerts"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("inventory_items")
+        .select("id,name,expiry_date")
+        .not("expiry_date", "is", null);
+      return data ?? [];
+    },
+  });
+  const today0 = new Date();
+  today0.setHours(0, 0, 0, 0);
+  const expiringItems = (inventoryAlerts ?? []).filter((i) => {
+    const d = Math.round(
+      (new Date(i.expiry_date + "T00:00:00").getTime() - today0.getTime()) / 86400000,
+    );
+    return d <= 4;
+  });
+
   const t = todayISO();
   const y = yesterdayISO();
   const ws = weekStartISO();
@@ -108,7 +127,7 @@ function DashboardPage() {
   const leadsByDate = leads.map((l) => ({ date: entryDay(l) }));
   const apptByDate = leads
     .filter((l) => l.appointment_date)
-    .map((l) => ({ date: l.appointment_date! }));
+    .map((l) => ({ date: l.appointment_date!.slice(0, 10) }));
   const evalByDate = leads
     .filter((l) => (l.checklist as Record<string, boolean>)?.avaliacao_realizada)
     .map((l) => ({ date: entryDay(l) }));
@@ -119,7 +138,7 @@ function DashboardPage() {
     .filter((l) => l.stage === "fechado")
     .map((l) => ({ date: entryDay(l) }));
 
-  const apptToday = leads.filter((l) => l.appointment_date === t).length;
+  const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
 
   const sumCalls = (k: "calls_made" | "calls_answered", s: string, e: string) =>
     leads.filter((l) => entryDay(l) >= s && entryDay(l) <= e).reduce((a, l) => a + (l[k] || 0), 0);
@@ -147,6 +166,18 @@ function DashboardPage() {
           {userName ? `, ${userName}` : ""}
         </p>
       </header>
+
+      {expiringItems.length > 0 && (
+        <Link
+          to="/estoque"
+          className="flex items-center gap-3 bg-destructive/10 border border-destructive/30 rounded-xl p-4 hover:border-destructive/60 transition-colors"
+        >
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <p className="text-sm text-destructive font-medium">
+            {expiringItems.length} produto(s) do estoque vencendo em até 4 dias — ver Estoque
+          </p>
+        </Link>
+      )}
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-2 rounded-2xl bg-card border-2 border-primary/50 shadow-sm p-5 relative overflow-hidden">

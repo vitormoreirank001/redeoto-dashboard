@@ -10,6 +10,9 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          agenda_end_hour: number;
+          agenda_slot_minutes: number;
+          agenda_start_hour: number;
           id: boolean;
           logo_url: string | null;
           updated_at: string;
@@ -17,6 +20,9 @@ export type Database = {
           whatsapp_webhook_token: string;
         };
         Insert: {
+          agenda_end_hour?: number;
+          agenda_slot_minutes?: number;
+          agenda_start_hour?: number;
           id?: boolean;
           logo_url?: string | null;
           updated_at?: string;
@@ -24,11 +30,80 @@ export type Database = {
           whatsapp_webhook_token?: string;
         };
         Update: {
+          agenda_end_hour?: number;
+          agenda_slot_minutes?: number;
+          agenda_start_hour?: number;
           id?: boolean;
           logo_url?: string | null;
           updated_at?: string;
           whatsapp_connected_at?: string | null;
           whatsapp_webhook_token?: string;
+        };
+        Relationships: [];
+      };
+      expenses: {
+        Row: {
+          amount: number;
+          category: string;
+          created_at: string;
+          created_by: string | null;
+          description: string;
+          expense_date: string;
+          id: string;
+        };
+        Insert: {
+          amount?: number;
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          description: string;
+          expense_date?: string;
+          id?: string;
+        };
+        Update: {
+          amount?: number;
+          category?: string;
+          created_at?: string;
+          created_by?: string | null;
+          description?: string;
+          expense_date?: string;
+          id?: string;
+        };
+        Relationships: [];
+      };
+      inventory_items: {
+        Row: {
+          category: string | null;
+          created_at: string;
+          expiry_date: string | null;
+          id: string;
+          name: string;
+          notes: string | null;
+          quantity: number;
+          unit: string;
+          updated_at: string;
+        };
+        Insert: {
+          category?: string | null;
+          created_at?: string;
+          expiry_date?: string | null;
+          id?: string;
+          name: string;
+          notes?: string | null;
+          quantity?: number;
+          unit?: string;
+          updated_at?: string;
+        };
+        Update: {
+          category?: string | null;
+          created_at?: string;
+          expiry_date?: string | null;
+          id?: string;
+          name?: string;
+          notes?: string | null;
+          quantity?: number;
+          unit?: string;
+          updated_at?: string;
         };
         Relationships: [];
       };

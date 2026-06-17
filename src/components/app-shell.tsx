@@ -1,6 +1,15 @@
 import { type ReactNode, useEffect, useState } from "react";
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
-import { LayoutDashboard, KanbanSquare, LineChart, Settings, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  KanbanSquare,
+  LineChart,
+  Settings,
+  LogOut,
+  Wallet,
+  CalendarDays,
+  Package,
+} from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
@@ -16,11 +25,32 @@ const navItems = [
   },
   { to: "/crm", label: "CRM", shortLabel: "CRM", icon: KanbanSquare, adminOnly: false },
   {
+    to: "/agendamento",
+    label: "Agendamento",
+    shortLabel: "Agenda",
+    icon: CalendarDays,
+    adminOnly: false,
+  },
+  {
+    to: "/estoque",
+    label: "Estoque",
+    shortLabel: "Estoque",
+    icon: Package,
+    adminOnly: false,
+  },
+  {
     to: "/estatisticas",
     label: "Estatísticas",
     shortLabel: "Stats",
     icon: LineChart,
     adminOnly: false,
+  },
+  {
+    to: "/financeiro",
+    label: "Financeiro",
+    shortLabel: "Financ.",
+    icon: Wallet,
+    adminOnly: true,
   },
   {
     to: "/configuracoes",
