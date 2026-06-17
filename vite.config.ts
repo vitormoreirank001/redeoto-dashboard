@@ -12,4 +12,8 @@ export default defineConfig({
     // nitro/vite builds from this
     server: { entry: "server" },
   },
+  // Outside the Lovable sandbox the nitro deploy plugin is skipped by default,
+  // which leaves SSR routes unservable on Vercel (404 on every page). Force it
+  // on with the "vercel" preset so the build emits a proper .vercel/output.
+  nitro: { preset: "vercel" },
 });
