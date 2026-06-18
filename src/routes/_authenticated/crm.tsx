@@ -16,6 +16,7 @@ import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
 import { formatBRL } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
+import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 
 export const Route = createFileRoute("/_authenticated/crm")({
   component: CRMPage,
@@ -40,17 +41,6 @@ export interface Lead {
   calls: Array<{ at: string; answered: boolean }>;
   custom_data: Record<string, string | number | boolean | null>;
   updated_at: string;
-}
-
-const SLA_MS: Record<string, number> = {
-  novo: 30 * 60 * 1000, // 30 min sem mover de "Novo Lead"
-  contato: 24 * 60 * 60 * 1000, // 24h sem mover de "Contato Feito"
-};
-
-function isOverdue(lead: Lead) {
-  const sla = SLA_MS[lead.stage];
-  if (!sla) return false;
-  return Date.now() - new Date(lead.updated_at).getTime() > sla;
 }
 
 const COLUMNS = [
@@ -271,6 +261,7 @@ function CRMPage() {
                 <div className="flex-1 overflow-y-auto p-3 space-y-2">
                   {items.map((lead) => {
                     const overdue = isOverdue(lead);
+                    const followupStep = overdueFollowupStep(lead);
                     return (
                       <div
                         key={lead.id}
@@ -290,7 +281,8 @@ function CRMPage() {
                           <div className="flex items-center gap-1 shrink-0">
                             {overdue && (
                               <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
-                                <AlertTriangle className="h-3 w-3" /> Atrasado
+                                <AlertTriangle className="h-3 w-3" />
+                                {followupStep ? `Follow-up ${followupStep.label}` : "Atrasado"}
                               </span>
                             )}
                             {lead.urgent && (

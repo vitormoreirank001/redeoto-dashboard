@@ -28,6 +28,7 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
+import { isOverdue } from "@/lib/lead-sla";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -41,17 +42,6 @@ interface Lead {
   checklist: Record<string, boolean> | null;
   updated_at: string;
   calls: Array<{ at: string; answered: boolean }>;
-}
-
-const SLA_MS: Record<string, number> = {
-  novo: 30 * 60 * 1000,
-  contato: 24 * 60 * 60 * 1000,
-};
-
-function isOverdue(lead: Lead) {
-  const sla = SLA_MS[lead.stage];
-  if (!sla) return false;
-  return Date.now() - new Date(lead.updated_at).getTime() > sla;
 }
 
 function countBetween(items: { date: string }[], start: string, end: string) {
