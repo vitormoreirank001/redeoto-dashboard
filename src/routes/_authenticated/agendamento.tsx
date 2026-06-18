@@ -13,12 +13,43 @@ export const Route = createFileRoute("/_authenticated/agendamento")({
   component: AgendamentoPage,
 });
 
-const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+type View = "day" | "week" | "month";
 
-function startOfWeek(d: Date) {
+const WEEKDAYS = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+const MONTHS = [
+  "Janeiro",
+  "Fevereiro",
+  "Março",
+  "Abril",
+  "Maio",
+  "Junho",
+  "Julho",
+  "Agosto",
+  "Setembro",
+  "Outubro",
+  "Novembro",
+  "Dezembro",
+];
+
+function startOfDay(d: Date) {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);
+  return r;
+}
+
+function startOfWeek(d: Date) {
+  const r = startOfDay(d);
   r.setDate(r.getDate() - r.getDay());
+  return r;
+}
+
+function startOfMonth(d: Date) {
+  return new Date(d.getFullYear(), d.getMonth(), 1);
+}
+
+function addDays(d: Date, n: number) {
+  const r = new Date(d);
+  r.setDate(r.getDate() + n);
   return r;
 }
 
@@ -28,7 +59,8 @@ function fmtKey(d: Date) {
 
 function AgendamentoPage() {
   const qc = useQueryClient();
-  const [weekStart, setWeekStart] = useState(() => startOfWeek(new Date()));
+  const [view, setView] = useState<View>("week");
+  const [anchor, setAnchor] = useState(() => new Date());
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [creatingAt, setCreatingAt] = useState<string | null>(null);
 
@@ -40,22 +72,18 @@ function AgendamentoPage() {
     },
   });
 
-  const days = useMemo(
-    () =>
-      Array.from({ length: 7 }, (_, i) => {
-        const d = new Date(weekStart);
-        d.setDate(d.getDate() + i);
-        return d;
-      }),
-    [weekStart],
-  );
+  const visibleDays = useMemo(() => {
+    if (view === "day") return [startOfDay(anchor)];
+    if (view === "week") {
+      const start = startOfWeek(anchor);
+      return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+    }
+    const gridStart = startOfWeek(startOfMonth(anchor));
+    return Array.from({ length: 42 }, (_, i) => addDays(gridStart, i));
+  }, [view, anchor]);
 
-  const rangeStart = fmtKey(days[0]);
-  const rangeEndExclusive = useMemo(() => {
-    const d = new Date(days[6]);
-    d.setDate(d.getDate() + 1);
-    return fmtKey(d);
-  }, [days]);
+  const rangeStart = fmtKey(visibleDays[0]);
+  const rangeEndExclusive = fmtKey(addDays(visibleDays[visibleDays.length - 1], 1));
 
   const leadsQ = useQuery({
     queryKey: ["leads_agenda", rangeStart, rangeEndExclusive],
@@ -105,8 +133,40 @@ function AgendamentoPage() {
     return d.toISOString();
   }
 
-  const totalWeek = leadsQ.data?.length ?? 0;
+  function shift(delta: number) {
+    setAnchor((a) => {
+      if (view === "day") return addDays(a, delta);
+      if (view === "week") return addDays(a, delta * 7);
+      const r = new Date(a);
+      r.setMonth(r.getMonth() + delta);
+      return r;
+    });
+  }
+
   const today = fmtKey(new Date());
+
+  const totalCount = useMemo(() => {
+    if (view !== "month") return leadsQ.data?.length ?? 0;
+    return (leadsQ.data ?? []).filter((l) => {
+      if (!l.appointment_date) return false;
+      const d = new Date(l.appointment_date);
+      return d.getMonth() === anchor.getMonth() && d.getFullYear() === anchor.getFullYear();
+    }).length;
+  }, [leadsQ.data, view, anchor]);
+
+  const countLabel =
+    view === "day"
+      ? `${totalCount} agendamento(s) neste dia`
+      : view === "week"
+        ? `${totalCount} agendamento(s) nesta semana`
+        : `${totalCount} agendamento(s) neste mês`;
+
+  const periodLabel =
+    view === "day"
+      ? anchor.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })
+      : view === "week"
+        ? `${visibleDays[0].getDate()}/${visibleDays[0].getMonth() + 1} – ${visibleDays[6].getDate()}/${visibleDays[6].getMonth() + 1}`
+        : `${MONTHS[anchor.getMonth()]} de ${anchor.getFullYear()}`;
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
@@ -114,101 +174,170 @@ function AgendamentoPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Agendamento</h1>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            {totalWeek} agendamento(s) nesta semana
+            {periodLabel} · {countLabel}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              setWeekStart((w) => {
-                const d = new Date(w);
-                d.setDate(d.getDate() - 7);
-                return d;
-              })
-            }
-          >
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center rounded-md border border-border overflow-hidden">
+            {(
+              [
+                { id: "day", label: "Dia" },
+                { id: "week", label: "Semana" },
+                { id: "month", label: "Mês" },
+              ] as const
+            ).map((v) => (
+              <button
+                key={v.id}
+                onClick={() => setView(v.id)}
+                className={cn(
+                  "text-xs px-3 h-9 font-medium transition-colors",
+                  view === v.id
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+                )}
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+          <Button variant="outline" size="icon" onClick={() => shift(-1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>
-          <Button variant="outline" onClick={() => setWeekStart(startOfWeek(new Date()))}>
+          <Button variant="outline" onClick={() => setAnchor(new Date())}>
             <CalendarDays className="h-4 w-4 mr-2" /> Hoje
           </Button>
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() =>
-              setWeekStart((w) => {
-                const d = new Date(w);
-                d.setDate(d.getDate() + 7);
-                return d;
-              })
-            }
-          >
+          <Button variant="outline" size="icon" onClick={() => shift(1)}>
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
-      <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
-        <div className="min-w-[900px] grid grid-cols-[80px_repeat(7,1fr)]">
-          <div className="border-b border-border p-2"></div>
-          {days.map((d) => {
-            const key = fmtKey(d);
-            const isToday = key === today;
-            return (
+      {view === "month" ? (
+        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+          <div className="grid grid-cols-7">
+            {WEEKDAYS.map((w) => (
               <div
-                key={key}
-                className={cn(
-                  "border-b border-l border-border p-2 text-center",
-                  isToday && "bg-primary/5",
-                )}
+                key={w}
+                className="border-b border-border p-2 text-center text-xs text-muted-foreground font-medium"
               >
-                <div className="text-xs text-muted-foreground">{WEEKDAYS[d.getDay()]}</div>
-                <div className={cn("text-sm font-semibold", isToday && "text-primary")}>
-                  {d.getDate()}/{d.getMonth() + 1}
-                </div>
+                {w}
               </div>
-            );
-          })}
-
-          {slots.map(({ hour, minute }) => (
-            <Fragment key={`row-${hour}-${minute}`}>
-              <div
-                key={`label-${hour}-${minute}`}
-                className="border-b border-border p-2 text-xs text-muted-foreground text-right pr-3"
-              >
-                {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
-              </div>
-              {days.map((d) => {
-                const dayKey = fmtKey(d);
-                const lead = leadAt(dayKey, hour, minute);
-                return (
-                  <button
-                    key={`${dayKey}-${hour}-${minute}`}
-                    onClick={() => {
-                      if (lead) setOpenLead(lead);
-                      else setCreatingAt(slotDateTime(d, hour, minute));
-                    }}
+            ))}
+          </div>
+          <div className="grid grid-cols-7">
+            {visibleDays.map((d) => {
+              const key = fmtKey(d);
+              const isToday = key === today;
+              const inMonth = d.getMonth() === anchor.getMonth();
+              const dayLeads = leadsByDay[key] ?? [];
+              return (
+                <button
+                  key={key}
+                  onClick={() => {
+                    setAnchor(d);
+                    setView("day");
+                  }}
+                  className={cn(
+                    "border-b border-l border-border p-1.5 min-h-[88px] text-left align-top transition-colors hover:bg-muted/40",
+                    !inMonth && "bg-muted/20",
+                  )}
+                >
+                  <div
                     className={cn(
-                      "border-b border-l border-border p-1.5 text-left min-h-[44px] text-xs transition-colors",
-                      lead
-                        ? "bg-primary/10 hover:bg-primary/15"
-                        : "hover:bg-muted/60 text-muted-foreground/50",
+                      "text-xs font-semibold",
+                      isToday
+                        ? "h-5 w-5 rounded-full bg-primary text-primary-foreground flex items-center justify-center"
+                        : inMonth
+                          ? "text-foreground"
+                          : "text-muted-foreground/50",
                     )}
                   >
-                    {lead ? (
-                      <div className="font-medium text-primary truncate">{lead.name}</div>
-                    ) : (
-                      <span className="opacity-0 group-hover:opacity-100">Disponível</span>
+                    {d.getDate()}
+                  </div>
+                  <div className="mt-1 space-y-0.5">
+                    {dayLeads.slice(0, 3).map((l) => (
+                      <div
+                        key={l.id}
+                        className="text-[10px] truncate px-1 py-0.5 rounded bg-primary/10 text-primary"
+                      >
+                        {l.name}
+                      </div>
+                    ))}
+                    {dayLeads.length > 3 && (
+                      <div className="text-[10px] text-muted-foreground px-1">
+                        +{dayLeads.length - 3} mais
+                      </div>
                     )}
-                  </button>
-                );
-              })}
-            </Fragment>
-          ))}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="bg-card border border-border rounded-xl shadow-sm overflow-x-auto">
+          <div
+            className={cn("grid", view === "week" && "min-w-[900px]")}
+            style={{ gridTemplateColumns: `80px repeat(${visibleDays.length}, 1fr)` }}
+          >
+            <div className="border-b border-border p-2"></div>
+            {visibleDays.map((d) => {
+              const key = fmtKey(d);
+              const isToday = key === today;
+              return (
+                <div
+                  key={key}
+                  className={cn(
+                    "border-b border-l border-border p-2 text-center",
+                    isToday && "bg-primary/5",
+                  )}
+                >
+                  <div className="text-xs text-muted-foreground">{WEEKDAYS[d.getDay()]}</div>
+                  <div className={cn("text-sm font-semibold", isToday && "text-primary")}>
+                    {d.getDate()}/{d.getMonth() + 1}
+                  </div>
+                </div>
+              );
+            })}
+
+            {slots.map(({ hour, minute }) => (
+              <Fragment key={`row-${hour}-${minute}`}>
+                <div
+                  key={`label-${hour}-${minute}`}
+                  className="border-b border-border p-2 text-xs text-muted-foreground text-right pr-3"
+                >
+                  {String(hour).padStart(2, "0")}:{String(minute).padStart(2, "0")}
+                </div>
+                {visibleDays.map((d) => {
+                  const dayKey = fmtKey(d);
+                  const lead = leadAt(dayKey, hour, minute);
+                  return (
+                    <button
+                      key={`${dayKey}-${hour}-${minute}`}
+                      onClick={() => {
+                        if (lead) setOpenLead(lead);
+                        else setCreatingAt(slotDateTime(d, hour, minute));
+                      }}
+                      className={cn(
+                        "border-b border-l border-border p-1.5 text-left min-h-[44px] text-xs transition-colors",
+                        lead
+                          ? "bg-primary/10 hover:bg-primary/15"
+                          : "hover:bg-muted/60 text-muted-foreground/50",
+                      )}
+                    >
+                      {lead ? (
+                        <div className="font-medium text-primary truncate">{lead.name}</div>
+                      ) : (
+                        <span className="opacity-0 group-hover:opacity-100">Disponível</span>
+                      )}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(openLead || creatingAt) && (
         <LeadModal
