@@ -36,6 +36,16 @@ function fromDatetimeLocal(value: string) {
   return new Date(value).toISOString();
 }
 
+function formatCallAt(iso: string) {
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 const STAGES = [
   { id: "novo", label: "🆕 Novo Lead" },
   { id: "contato", label: "📞 Contato Feito" },
@@ -85,13 +95,14 @@ export function LeadModal({
     checklist: {},
     notes: "",
     history: [],
-    calls_made: 0,
-    calls_answered: 0,
+    calls: [],
     custom_data: {},
     ...initial,
     ...lead,
   }));
   const [newNote, setNewNote] = useState("");
+  const [newCallAt, setNewCallAt] = useState(() => toDatetimeLocal(null));
+  const [newCallAnswered, setNewCallAnswered] = useState<"sim" | "nao">("sim");
 
   const { data: options } = useQuery({
     queryKey: ["field_options"],
@@ -123,6 +134,7 @@ export function LeadModal({
         ...lead,
         checklist: lead.checklist || {},
         history: lead.history || [],
+        calls: lead.calls || [],
         custom_data: lead.custom_data || {},
       });
     }
@@ -138,6 +150,19 @@ export function LeadModal({
 
   function updateCustom(key: string, value: string | number | boolean) {
     setForm((f) => ({ ...f, custom_data: { ...(f.custom_data ?? {}), [key]: value } }));
+  }
+
+  function addCall() {
+    const entry = { at: fromDatetimeLocal(newCallAt), answered: newCallAnswered === "sim" };
+    setForm((f) => ({
+      ...f,
+      calls: [entry, ...(f.calls ?? [])].sort((a, b) => b.at.localeCompare(a.at)),
+    }));
+    setNewCallAt(toDatetimeLocal(null));
+  }
+
+  function removeCall(index: number) {
+    setForm((f) => ({ ...f, calls: (f.calls ?? []).filter((_, i) => i !== index) }));
   }
 
   async function save() {
@@ -157,8 +182,7 @@ export function LeadModal({
       checklist: form.checklist ?? {},
       notes: form.notes || null,
       history: form.history ?? [],
-      calls_made: Number(form.calls_made) || 0,
-      calls_answered: Number(form.calls_answered) || 0,
+      calls: form.calls ?? [],
       custom_data: form.custom_data ?? {},
     };
     let error;
@@ -324,23 +348,64 @@ export function LeadModal({
 
         <div className="mt-6">
           <h4 className="text-sm font-semibold mb-3">Ligações</h4>
-          <div className="grid grid-cols-2 gap-4 max-w-md">
-            <Field label="Ligações feitas">
+          <div className="flex flex-wrap items-end gap-2">
+            <Field label="Status">
+              <Select
+                value={newCallAnswered}
+                onValueChange={(v) => setNewCallAnswered(v as "sim" | "nao")}
+              >
+                <SelectTrigger className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="sim">Atendida</SelectItem>
+                  <SelectItem value="nao">Não atendida</SelectItem>
+                </SelectContent>
+              </Select>
+            </Field>
+            <Field label="Data e hora da ligação">
               <Input
-                type="number"
-                min={0}
-                value={form.calls_made ?? 0}
-                onChange={(e) => update("calls_made", Number(e.target.value) || 0)}
+                type="datetime-local"
+                value={newCallAt}
+                onChange={(e) => setNewCallAt(e.target.value)}
               />
             </Field>
-            <Field label="Ligações atendidas">
-              <Input
-                type="number"
-                min={0}
-                value={form.calls_answered ?? 0}
-                onChange={(e) => update("calls_answered", Number(e.target.value) || 0)}
-              />
-            </Field>
+            <Button type="button" variant="secondary" onClick={addCall}>
+              Registrar ligação
+            </Button>
+          </div>
+          <div className="mt-3 space-y-1.5 max-h-40 overflow-y-auto">
+            {(form.calls ?? []).length === 0 && (
+              <p className="text-sm text-muted-foreground">Nenhuma ligação registrada.</p>
+            )}
+            {(form.calls ?? []).map((c, i) => (
+              <div
+                key={i}
+                className="flex items-center justify-between bg-background border border-border rounded-md p-2 text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span
+                    className={
+                      c.answered
+                        ? "px-2 py-0.5 rounded-full text-xs font-medium bg-success/15 text-[#16A34A]"
+                        : "px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/15 text-destructive"
+                    }
+                  >
+                    {c.answered ? "Atendida" : "Não atendida"}
+                  </span>
+                  <span className="text-muted-foreground">{formatCallAt(c.at)}</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 w-7 p-0 text-muted-foreground hover:text-destructive"
+                  onClick={() => removeCall(i)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
 

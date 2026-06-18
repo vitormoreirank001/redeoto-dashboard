@@ -37,8 +37,7 @@ export interface Lead {
   checklist: Record<string, boolean>;
   notes: string | null;
   history: Array<{ at: string; text: string }>;
-  calls_made: number;
-  calls_answered: number;
+  calls: Array<{ at: string; answered: boolean }>;
   custom_data: Record<string, string | number | boolean | null>;
   updated_at: string;
 }

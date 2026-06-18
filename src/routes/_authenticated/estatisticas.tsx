@@ -121,13 +121,17 @@ function StatsPage() {
     revenue: v.revenue,
   }));
 
-  // Calls (agregadas por dia a partir dos leads)
+  // Calls (agregadas por dia a partir da data/hora real de cada ligação registrada,
+  // não a data de entrada do lead — um lead antigo pode receber uma ligação hoje)
   const callsByDay: Record<string, { calls_made: number; calls_answered: number }> = {};
-  leads.forEach((l: any) => {
-    const k = entryDay(l);
-    if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
-    callsByDay[k].calls_made += l.calls_made || 0;
-    callsByDay[k].calls_answered += l.calls_answered || 0;
+  (data?.leads ?? []).forEach((l: any) => {
+    (l.calls ?? []).forEach((c: { at: string; answered: boolean }) => {
+      const k = c.at.slice(0, 10);
+      if (k < start.toISOString().slice(0, 10)) return;
+      if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
+      callsByDay[k].calls_made += 1;
+      if (c.answered) callsByDay[k].calls_answered += 1;
+    });
   });
   const callsData = Object.entries(callsByDay)
     .sort(([a], [b]) => a.localeCompare(b))

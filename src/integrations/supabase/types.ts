@@ -207,8 +207,7 @@ export type Database = {
         Row: {
           appointment_date: string | null;
           budget_amount: number | null;
-          calls_answered: number;
-          calls_made: number;
+          calls: Json;
           checklist: Json;
           created_at: string;
           created_by: string | null;
@@ -230,8 +229,7 @@ export type Database = {
         Insert: {
           appointment_date?: string | null;
           budget_amount?: number | null;
-          calls_answered?: number;
-          calls_made?: number;
+          calls?: Json;
           checklist?: Json;
           created_at?: string;
           created_by?: string | null;
@@ -253,8 +251,7 @@ export type Database = {
         Update: {
           appointment_date?: string | null;
           budget_amount?: number | null;
-          calls_answered?: number;
-          calls_made?: number;
+          calls?: Json;
           checklist?: Json;
           created_at?: string;
           created_by?: string | null;

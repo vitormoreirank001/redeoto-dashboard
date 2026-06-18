@@ -40,8 +40,7 @@ interface Lead {
   budget_amount: number | null;
   checklist: Record<string, boolean> | null;
   updated_at: string;
-  calls_made: number;
-  calls_answered: number;
+  calls: Array<{ at: string; answered: boolean }>;
 }
 
 const SLA_MS: Record<string, number> = {
@@ -80,7 +79,7 @@ function DashboardPage() {
         supabase
           .from("leads")
           .select(
-            "entry_date,appointment_date,stage,budget_amount,checklist,updated_at,calls_made,calls_answered",
+            "entry_date,appointment_date,stage,budget_amount,checklist,updated_at,calls",
           ),
         supabase
           .from("monthly_goals")
@@ -140,8 +139,12 @@ function DashboardPage() {
 
   const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
 
-  const sumCalls = (k: "calls_made" | "calls_answered", s: string, e: string) =>
-    leads.filter((l) => entryDay(l) >= s && entryDay(l) <= e).reduce((a, l) => a + (l[k] || 0), 0);
+  const allCalls = leads.flatMap((l) => l.calls ?? []);
+  const callDay = (c: { at: string }) => c.at.slice(0, 10);
+  const sumCalls = (kind: "made" | "answered", s: string, e: string) =>
+    allCalls.filter(
+      (c) => callDay(c) >= s && callDay(c) <= e && (kind === "made" || c.answered),
+    ).length;
 
   const revenueMonth = leads
     .filter((l) => l.stage === "fechado" && entryDay(l) >= ms && entryDay(l) <= me)
@@ -151,8 +154,8 @@ function DashboardPage() {
   const pct = goal > 0 ? Math.min(100, Math.round((revenueMonth / goal) * 100)) : 0;
   const missing = Math.max(0, goal - revenueMonth);
 
-  const ans = sumCalls("calls_answered", ms, me);
-  const made = sumCalls("calls_made", ms, me);
+  const ans = sumCalls("answered", ms, me);
+  const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
   const overdueCount = leads.filter(isOverdue).length;
@@ -333,17 +336,17 @@ function DashboardPage() {
         <MetricCard
           title="Ligações Feitas"
           icon={PhoneCall}
-          today={sumCalls("calls_made", t, t)}
-          yesterday={sumCalls("calls_made", y, y)}
-          week={sumCalls("calls_made", ws, t)}
+          today={sumCalls("made", t, t)}
+          yesterday={sumCalls("made", y, y)}
+          week={sumCalls("made", ws, t)}
           month={made}
         />
         <MetricCard
           title="Ligações Atendidas"
           icon={PhoneIncoming}
-          today={sumCalls("calls_answered", t, t)}
-          yesterday={sumCalls("calls_answered", y, y)}
-          week={sumCalls("calls_answered", ws, t)}
+          today={sumCalls("answered", t, t)}
+          yesterday={sumCalls("answered", y, y)}
+          week={sumCalls("answered", ws, t)}
           month={ans}
           footer={
             <p className="text-xs text-muted-foreground">
