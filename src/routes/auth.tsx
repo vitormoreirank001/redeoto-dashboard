@@ -5,16 +5,21 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export const Route = createFileRoute("/auth")({
   component: AuthPage,
 });
 
+// SEGURANÇA: cadastro público removido de propósito. Este é um painel interno —
+// novos usuários são criados apenas por um admin em Configurações (Edge Function
+// admin-create-user, que valida has_role('admin')). Manter também "Allow new users
+// to sign up" DESLIGADO em Supabase → Authentication → Providers.
 function AuthPage() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [loginEmail, setLoginEmail] = useState("");
+  const [loginPass, setLoginPass] = useState("");
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
@@ -28,12 +33,6 @@ function AuthPage() {
       .then(({ data }) => setLogoUrl(data?.logo_url ?? null));
   }, [navigate]);
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPass, setLoginPass] = useState("");
-  const [signupEmail, setSignupEmail] = useState("");
-  const [signupPass, setSignupPass] = useState("");
-  const [signupName, setSignupName] = useState("");
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -45,22 +44,6 @@ function AuthPage() {
     if (error) return toast.error(error.message);
     toast.success("Bem-vindo!");
     navigate({ to: "/dashboard" });
-  }
-
-  async function handleSignup(e: React.FormEvent) {
-    e.preventDefault();
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email: signupEmail,
-      password: signupPass,
-      options: {
-        emailRedirectTo: window.location.origin,
-        data: { full_name: signupName },
-      },
-    });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Conta criada! Você já pode entrar.");
   }
 
   return (
@@ -79,80 +62,35 @@ function AuthPage() {
         </div>
 
         <div className="bg-card border border-border rounded-2xl p-6 shadow-xl shadow-black/5">
-          <Tabs defaultValue="login">
-            <TabsList className="grid w-full grid-cols-2 mb-6 bg-secondary">
-              <TabsTrigger value="login">Entrar</TabsTrigger>
-              <TabsTrigger value="signup">Criar conta</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="email">E-mail</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="voce@redeoto.com.br"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Senha</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    required
-                    value={loginPass}
-                    onChange={(e) => setLoginPass(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Entrando…" : "Entrar"}
-                </Button>
-              </form>
-            </TabsContent>
-
-            <TabsContent value="signup">
-              <form onSubmit={handleSignup} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nome completo</Label>
-                  <Input
-                    id="name"
-                    required
-                    value={signupName}
-                    onChange={(e) => setSignupName(e.target.value)}
-                    placeholder="Dra. Sara"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="se">E-mail</Label>
-                  <Input
-                    id="se"
-                    type="email"
-                    required
-                    value={signupEmail}
-                    onChange={(e) => setSignupEmail(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="sp">Senha</Label>
-                  <Input
-                    id="sp"
-                    type="password"
-                    required
-                    minLength={6}
-                    value={signupPass}
-                    onChange={(e) => setSignupPass(e.target.value)}
-                  />
-                </div>
-                <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? "Criando…" : "Criar conta"}
-                </Button>
-              </form>
-            </TabsContent>
-          </Tabs>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                required
+                value={loginEmail}
+                onChange={(e) => setLoginEmail(e.target.value)}
+                placeholder="voce@redeoto.com.br"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                value={loginPass}
+                onChange={(e) => setLoginPass(e.target.value)}
+              />
+            </div>
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? "Entrando…" : "Entrar"}
+            </Button>
+          </form>
+          <p className="text-xs text-muted-foreground text-center mt-4">
+            Acesso restrito à equipe. Novos usuários são cadastrados pelo administrador.
+          </p>
         </div>
       </div>
     </div>

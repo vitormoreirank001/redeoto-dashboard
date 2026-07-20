@@ -67,7 +67,12 @@ function AgendamentoPage() {
   const settingsQ = useQuery({
     queryKey: ["app_settings"],
     queryFn: async () => {
-      const { data } = await supabase.from("app_settings").select("*").maybeSingle();
+      // Não usar select("*"): app_settings guarda o whatsapp_webhook_token (segredo).
+      // Buscar só as colunas que a agenda precisa para não enviar o token ao cliente.
+      const { data } = await supabase
+        .from("app_settings")
+        .select("agenda_start_hour,agenda_end_hour,agenda_slot_minutes")
+        .maybeSingle();
       return data;
     },
   });
