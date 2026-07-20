@@ -21,6 +21,7 @@ import {
   greeting,
   monthEndISO,
   monthStartISO,
+  saleDay,
   todayISO,
   weekStartISO,
   yesterdayISO,
@@ -36,6 +37,7 @@ export const Route = createFileRoute("/_authenticated/dashboard")({
 
 interface Lead {
   entry_date: string;
+  closed_at: string | null;
   appointment_date: string | null;
   stage: string;
   budget_amount: number | null;
@@ -69,7 +71,7 @@ function DashboardPage() {
         supabase
           .from("leads")
           .select(
-            "entry_date,appointment_date,stage,budget_amount,checklist,updated_at,calls",
+            "entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,calls",
           ),
         supabase
           .from("monthly_goals")
@@ -125,7 +127,7 @@ function DashboardPage() {
     .map((l) => ({ date: entryDay(l) }));
   const salesByDate = leads
     .filter((l) => l.stage === "fechado")
-    .map((l) => ({ date: entryDay(l) }));
+    .map((l) => ({ date: saleDay(l) }));
 
   const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
 
@@ -136,8 +138,9 @@ function DashboardPage() {
       (c) => callDay(c) >= s && callDay(c) <= e && (kind === "made" || c.answered),
     ).length;
 
+  // Faturamento do mês = vendas FECHADAS no mês (saleDay), não leads que entraram no mês.
   const revenueMonth = leads
-    .filter((l) => l.stage === "fechado" && entryDay(l) >= ms && entryDay(l) <= me)
+    .filter((l) => l.stage === "fechado" && saleDay(l) >= ms && saleDay(l) <= me)
     .reduce((a, l) => a + Number(l.budget_amount || 0), 0);
 
   const goal = data?.goal ?? 0;

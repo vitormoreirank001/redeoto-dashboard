@@ -17,7 +17,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { formatBRL } from "@/lib/date-ranges";
+import { formatBRL, saleDay } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
@@ -53,8 +53,17 @@ function StatsPage() {
   });
 
   const start = rangeStart(range);
+  const startDay = start.toISOString().slice(0, 10);
+
+  // Captação (funil, leads/dia): leads que ENTRARAM no período.
   const leads = (data?.leads ?? []).filter((l: any) => new Date(l.entry_date) >= start);
   const entryDay = (l: any) => l.entry_date.slice(0, 10);
+
+  // Vendas: leads que FECHARAM no período, independente de quando entraram.
+  // Um lead de junho que fechou em julho é venda de julho e precisa aparecer aqui.
+  const salesInRange = (data?.leads ?? []).filter(
+    (l: any) => l.stage === "fechado" && saleDay(l) >= startDay,
+  );
 
   const series = useMemo(() => {
     const days: Record<string, { date: string; leads: number; agend: number; vendas: number }> = {};
@@ -68,13 +77,16 @@ function StatsPage() {
       if (days[k]) days[k].leads++;
       const apptDay = l.appointment_date?.slice(0, 10);
       if (apptDay && days[apptDay]) days[apptDay].agend++;
-      if (l.stage === "fechado" && days[k]) days[k].vendas++;
+    });
+    salesInRange.forEach((l: any) => {
+      const k = saleDay(l);
+      if (days[k]) days[k].vendas++;
     });
     return Object.values(days).map((d) => ({
       ...d,
       label: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
     }));
-  }, [leads, start]);
+  }, [leads, salesInRange, start]);
 
   // Funnel
   const total = leads.length;
@@ -108,13 +120,11 @@ function StatsPage() {
     aparelho: { count: 0, revenue: 0 },
     outros: { count: 0, revenue: 0 },
   };
-  leads
-    .filter((l: any) => l.stage === "fechado")
-    .forEach((l: any) => {
-      svcMap[l.service] = svcMap[l.service] || { count: 0, revenue: 0 };
-      svcMap[l.service].count++;
-      svcMap[l.service].revenue += Number(l.budget_amount || 0);
-    });
+  salesInRange.forEach((l: any) => {
+    svcMap[l.service] = svcMap[l.service] || { count: 0, revenue: 0 };
+    svcMap[l.service].count++;
+    svcMap[l.service].revenue += Number(l.budget_amount || 0);
+  });
   const svcData = Object.entries(svcMap).map(([k, v]) => ({
     name: k === "implante" ? "Implante" : k === "aparelho" ? "Aparelho" : "Outros",
     count: v.count,

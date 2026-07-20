@@ -14,7 +14,7 @@ import {
 import { Plus, AlertTriangle, Search, X } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
-import { formatBRL } from "@/lib/date-ranges";
+import { formatBRL, saleDay } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 
@@ -33,6 +33,7 @@ export interface Lead {
   budget_amount: number | null;
   stage: string;
   entry_date: string;
+  closed_at: string | null;
   appointment_date: string | null;
   financing: string | null;
   checklist: Record<string, boolean>;
@@ -61,6 +62,59 @@ const SERVICE_LABEL: Record<string, { text: string; cls: string }> = {
 
 const ALL = "__all__";
 
+/** Qual data o filtro de período considera. */
+type DateBasis = "entry" | "sale";
+
+type Period = "all" | "today" | "7d" | "30d" | "month" | "lastmonth" | "custom";
+
+const PERIOD_LABEL: Record<Exclude<Period, "custom">, string> = {
+  all: "Todo o período",
+  today: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  month: "Este mês",
+  lastmonth: "Mês passado",
+};
+
+function iso(d: Date): string {
+  // Data local (não UTC) — toISOString() joga pro dia anterior no fuso do Brasil.
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
+    d.getDate(),
+  ).padStart(2, "0")}`;
+}
+
+/** Faixa [from, to] inclusiva em YYYY-MM-DD. `null` = sem limite daquele lado. */
+function periodRange(p: Period): { from: string | null; to: string | null } {
+  const now = new Date();
+  const today = iso(now);
+  switch (p) {
+    case "today":
+      return { from: today, to: today };
+    case "7d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 6);
+      return { from: iso(d), to: today };
+    }
+    case "30d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 29);
+      return { from: iso(d), to: today };
+    }
+    case "month":
+      return {
+        from: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+      };
+    case "lastmonth":
+      return {
+        from: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+        to: iso(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    default:
+      return { from: null, to: null };
+  }
+}
+
 function CRMPage() {
   const qc = useQueryClient();
   const [openLead, setOpenLead] = useState<Lead | null>(null);
@@ -72,6 +126,10 @@ function CRMPage() {
   const [filterService, setFilterService] = useState(ALL);
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [period, setPeriod] = useState<Period>("all");
+  const [dateBasis, setDateBasis] = useState<DateBasis>("entry");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
 
   const { data: leads = [] } = useQuery({
     queryKey: ["leads"],
@@ -117,6 +175,9 @@ function CRMPage() {
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
+    const { from, to } =
+      period === "custom" ? { from: customFrom || null, to: customTo || null } : periodRange(period);
+
     return leads.filter((l) => {
       if (q && !l.name.toLowerCase().includes(q) && !(l.phone ?? "").toLowerCase().includes(q)) {
         return false;
@@ -126,9 +187,43 @@ function CRMPage() {
       if (filterService !== ALL && l.service !== filterService) return false;
       if (onlyUrgent && !l.urgent) return false;
       if (onlyOverdue && !isOverdue(l)) return false;
+
+      if (from || to) {
+        // Na base "venda", quem não fechou não tem data e sai do resultado.
+        const day =
+          dateBasis === "sale"
+            ? l.stage === "fechado"
+              ? saleDay(l)
+              : null
+            : l.entry_date.slice(0, 10);
+        if (!day) return false;
+        if (from && day < from) return false;
+        if (to && day > to) return false;
+      }
       return true;
     });
-  }, [leads, search, filterMedia, filterOrigin, filterService, onlyUrgent, onlyOverdue]);
+  }, [
+    leads,
+    search,
+    filterMedia,
+    filterOrigin,
+    filterService,
+    onlyUrgent,
+    onlyOverdue,
+    period,
+    dateBasis,
+    customFrom,
+    customTo,
+  ]);
+
+  /** Total fechado dentro do filtro atual — confere direto com o DRE. */
+  const filteredRevenue = useMemo(
+    () =>
+      filteredLeads
+        .filter((l) => l.stage === "fechado")
+        .reduce((a, l) => a + Number(l.budget_amount || 0), 0),
+    [filteredLeads],
+  );
 
   const hasActiveFilters =
     !!search ||
@@ -136,7 +231,8 @@ function CRMPage() {
     filterOrigin !== ALL ||
     filterService !== ALL ||
     onlyUrgent ||
-    onlyOverdue;
+    onlyOverdue ||
+    period !== "all";
 
   function clearFilters() {
     setSearch("");
@@ -145,6 +241,10 @@ function CRMPage() {
     setFilterService(ALL);
     setOnlyUrgent(false);
     setOnlyOverdue(false);
+    setPeriod("all");
+    setDateBasis("entry");
+    setCustomFrom("");
+    setCustomTo("");
   }
 
   return (
@@ -206,6 +306,49 @@ function CRMPage() {
             <SelectItem value="outros">Outros</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+          <SelectTrigger className="h-9 w-auto min-w-[140px]">
+            <SelectValue placeholder="Período" />
+          </SelectTrigger>
+          <SelectContent>
+            {(Object.keys(PERIOD_LABEL) as Array<keyof typeof PERIOD_LABEL>).map((p) => (
+              <SelectItem key={p} value={p}>
+                {PERIOD_LABEL[p]}
+              </SelectItem>
+            ))}
+            <SelectItem value="custom">Personalizado…</SelectItem>
+          </SelectContent>
+        </Select>
+        {period !== "all" && (
+          <Select value={dateBasis} onValueChange={(v) => setDateBasis(v as DateBasis)}>
+            <SelectTrigger className="h-9 w-auto min-w-[150px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="entry">por data de entrada</SelectItem>
+              <SelectItem value="sale">por data da venda</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
+        {period === "custom" && (
+          <div className="flex items-center gap-1.5">
+            <Input
+              type="date"
+              value={customFrom}
+              onChange={(e) => setCustomFrom(e.target.value)}
+              className="h-9 w-auto"
+              aria-label="Data inicial"
+            />
+            <span className="text-xs text-muted-foreground">até</span>
+            <Input
+              type="date"
+              value={customTo}
+              onChange={(e) => setCustomTo(e.target.value)}
+              className="h-9 w-auto"
+              aria-label="Data final"
+            />
+          </div>
+        )}
         <button
           onClick={() => setOnlyUrgent((v) => !v)}
           className={cn(
@@ -237,6 +380,13 @@ function CRMPage() {
           </button>
         )}
       </div>
+
+      {hasActiveFilters && (
+        <div className="text-xs text-muted-foreground -mt-1">
+          {filteredLeads.length} {filteredLeads.length === 1 ? "lead" : "leads"} no filtro ·{" "}
+          <span className="font-semibold text-primary">{formatBRL(filteredRevenue)}</span> fechado
+        </div>
+      )}
 
       <div className="flex-1 overflow-x-auto overflow-y-hidden">
         <div className="flex gap-4 h-full min-w-max pb-2">
@@ -306,12 +456,17 @@ function CRMPage() {
                         </div>
                         <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
                           <span className="text-[11px] text-muted-foreground">
-                            {new Date(lead.entry_date).toLocaleString("pt-BR", {
-                              day: "2-digit",
-                              month: "2-digit",
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
+                            {lead.stage === "fechado" && lead.closed_at
+                              ? `Venda ${new Date(lead.closed_at).toLocaleDateString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                })}`
+                              : new Date(lead.entry_date).toLocaleString("pt-BR", {
+                                  day: "2-digit",
+                                  month: "2-digit",
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                })}
                           </span>
                           {lead.budget_amount && (
                             <span className="text-xs font-semibold text-primary">

@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Wallet, TrendingUp, ShieldAlert } from "lucide-react";
 import { toast } from "sonner";
-import { formatBRL } from "@/lib/date-ranges";
+import { formatBRL, saleDay } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -84,7 +84,7 @@ function FinanceiroContent() {
     queryFn: async () => {
       const { data } = await supabase
         .from("leads")
-        .select("entry_date,budget_amount,stage")
+        .select("entry_date,closed_at,budget_amount,stage")
         .eq("stage", "fechado");
       return data ?? [];
     },
@@ -122,7 +122,8 @@ function FinanceiroContent() {
     }
 
     leads.forEach((l: any) => {
-      const key = l.entry_date.slice(0, 7);
+      // Receita entra no mês em que a venda FECHOU, não no mês em que o lead entrou.
+      const key = saleDay(l).slice(0, 7);
       bucket(key).receita += Number(l.budget_amount || 0);
     });
     expenses.forEach((e: any) => {

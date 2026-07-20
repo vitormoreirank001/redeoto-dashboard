@@ -209,6 +209,7 @@ export type Database = {
           budget_amount: number | null;
           calls: Json;
           checklist: Json;
+          closed_at: string | null;
           created_at: string;
           created_by: string | null;
           custom_data: Json;
@@ -231,6 +232,7 @@ export type Database = {
           budget_amount?: number | null;
           calls?: Json;
           checklist?: Json;
+          closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           custom_data?: Json;
@@ -253,6 +255,7 @@ export type Database = {
           budget_amount?: number | null;
           calls?: Json;
           checklist?: Json;
+          closed_at?: string | null;
           created_at?: string;
           created_by?: string | null;
           custom_data?: Json;
