@@ -9,6 +9,7 @@ import {
   Wallet,
   CalendarDays,
   Package,
+  MessageCircle,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
@@ -24,6 +25,7 @@ const navItems = [
     adminOnly: false,
   },
   { to: "/crm", label: "CRM", shortLabel: "CRM", icon: KanbanSquare, adminOnly: false },
+  { to: "/chat", label: "Chat", shortLabel: "Chat", icon: MessageCircle, adminOnly: false },
   {
     to: "/agendamento",
     label: "Agendamento",
