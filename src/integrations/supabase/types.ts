@@ -383,6 +383,14 @@ export type Database = {
         };
         Returns: boolean;
       };
+      normalize_phone_br: {
+        Args: { raw: string };
+        Returns: string | null;
+      };
+      normalize_phone_jid: {
+        Args: { raw: string };
+        Returns: string | null;
+      };
     };
     Enums: {
       app_role: "admin" | "comercial";

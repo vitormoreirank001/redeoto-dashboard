@@ -56,6 +56,25 @@ const STAGES = [
   { id: "perdido", label: "❌ Perdido" },
 ];
 
+const STAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
+
+/**
+ * Só avisa duplicado quando já existe outro lead ABERTO com o mesmo telefone —
+ * cliente recorrente que já fechou/perdeu antes é lead novo legítimo, não duplicado.
+ */
+async function findOpenDuplicate(phone: string) {
+  const { data: e164 } = await supabase.rpc("normalize_phone_br", { raw: phone });
+  if (!e164) return null;
+  const { data } = await supabase
+    .from("leads")
+    .select("id,name,stage")
+    .eq("phone_e164", e164)
+    .not("stage", "in", "(fechado,perdido)")
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
+
 const CHECKLIST = [
   { key: "primeiro_contato", label: "Primeiro contato feito" },
   { key: "agendamento_oferecido", label: "Agendamento oferecido" },
@@ -167,6 +186,20 @@ export function LeadModal({
 
   async function save() {
     if (!form.name?.trim()) return toast.error("Nome é obrigatório");
+
+    if (isNew && form.phone?.trim()) {
+      const dup = await findOpenDuplicate(form.phone.trim());
+      if (dup) {
+        const stageLabel = STAGE_LABEL[dup.stage] ?? dup.stage;
+        const proceed = confirm(
+          `Já existe um lead aberto com esse telefone: "${dup.name}" (${stageLabel}).\n\n` +
+            `Se for a mesma conversa em andamento, cancele e abra o lead existente. ` +
+            `Criar mesmo assim?`,
+        );
+        if (!proceed) return;
+      }
+    }
+
     const payload = {
       name: form.name.trim(),
       phone: form.phone || null,
