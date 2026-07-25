@@ -42,6 +42,7 @@ export interface Lead {
   id: string;
   name: string;
   phone: string | null;
+  phone_e164: string | null;
   origin: string;
   media: string;
   service: string;

@@ -30,7 +30,8 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 import { COLUMNS } from "./crm";
-import { MessageCircle } from "lucide-react";
+import { CalendarPlus, MessageCircle } from "lucide-react";
+import { defaultReminderMessage, waLink } from "@/components/lead-modal";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -68,6 +69,58 @@ function timeInStage(iso: string): string {
   const hours = Math.floor(mins / 60);
   if (hours < 24) return `${hours}h`;
   return `${Math.floor(hours / 24)}d`;
+}
+
+function formatApptShort(iso: string): string {
+  const d = new Date(iso);
+  const day = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${day} às ${time}`;
+}
+
+const REMINDER_WINDOW_MS = 48 * 60 * 60 * 1000;
+
+interface ActionItem {
+  lead: Lead;
+  kind: "overdue" | "no_appointment" | "reminder_upcoming";
+  detail: string;
+  sortKey: number;
+}
+
+/** Um motivo por lead, na ordem de urgência: atrasado > sem agendamento > lembrete próximo. */
+function buildActionItem(lead: Lead): ActionItem | null {
+  if (isOverdue(lead)) {
+    const followupStep = overdueFollowupStep(lead);
+    return {
+      lead,
+      kind: "overdue",
+      detail: followupStep
+        ? `Follow-up ${followupStep.label} atrasado`
+        : `Há ${timeInStage(lead.stage_changed_at)} sem contato`,
+      sortKey: new Date(lead.stage_changed_at).getTime(),
+    };
+  }
+  if (!lead.appointment_date && lead.stage !== "fechado" && lead.stage !== "perdido") {
+    return {
+      lead,
+      kind: "no_appointment",
+      detail: "Sem agendamento marcado",
+      sortKey: new Date(lead.stage_changed_at).getTime(),
+    };
+  }
+  if (lead.appointment_date) {
+    const apptMs = new Date(lead.appointment_date).getTime();
+    const now = Date.now();
+    if (apptMs > now && apptMs - now <= REMINDER_WINDOW_MS) {
+      return {
+        lead,
+        kind: "reminder_upcoming",
+        detail: `Agendado ${formatApptShort(lead.appointment_date)}`,
+        sortKey: apptMs,
+      };
+    }
+  }
+  return null;
 }
 
 function DashboardPage() {
@@ -171,10 +224,12 @@ function DashboardPage() {
   const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
-  const overdueQueue = leads
-    .filter(isOverdue)
-    .sort((a, b) => new Date(a.stage_changed_at).getTime() - new Date(b.stage_changed_at).getTime());
-  const overdueCount = overdueQueue.length;
+  const overdueCount = leads.filter(isOverdue).length;
+
+  const actionQueue = leads
+    .map(buildActionItem)
+    .filter((x): x is ActionItem => x !== null)
+    .sort((a, b) => a.sortKey - b.sortKey);
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -310,24 +365,33 @@ function DashboardPage() {
             <AlertTriangle className="h-4 w-4 text-destructive" />
             Contate agora
           </h2>
-          {overdueCount > 0 && (
+          {actionQueue.length > 0 && (
             <Link to="/crm" className="text-xs text-primary hover:underline">
               Ver todos no CRM
             </Link>
           )}
         </div>
 
-        {overdueQueue.length === 0 ? (
+        {actionQueue.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
-            Nenhum lead atrasado — tudo dentro do prazo.
+            Nada pendente — tudo em dia.
           </p>
         ) : (
           <div className="space-y-1.5">
-            {overdueQueue.slice(0, 8).map((lead) => {
+            {actionQueue.slice(0, 8).map(({ lead, kind, detail }) => {
               const stageInfo = STAGE_LABEL[lead.stage];
-              const followupStep = overdueFollowupStep(lead);
+              const detailCls =
+                kind === "overdue"
+                  ? "text-destructive"
+                  : kind === "no_appointment"
+                    ? "text-[#D97706]"
+                    : "text-[#16A34A]";
               const waHref = lead.phone_e164
-                ? `https://wa.me/${lead.phone_e164.replace("+", "")}`
+                ? kind === "reminder_upcoming" && lead.appointment_date
+                  ? waLink(lead.phone_e164, defaultReminderMessage(lead.name, lead.appointment_date))
+                  : kind === "overdue"
+                    ? waLink(lead.phone_e164)
+                    : null
                 : null;
               return (
                 <Link
@@ -345,10 +409,11 @@ function DashboardPage() {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-destructive mt-0.5">
-                      {followupStep
-                        ? `Follow-up ${followupStep.label} atrasado`
-                        : `Há ${timeInStage(lead.stage_changed_at)} sem contato`}
+                    <p className={cn("text-xs mt-0.5", detailCls)}>
+                      {kind === "no_appointment" && (
+                        <CalendarPlus className="h-3 w-3 inline mr-1 -mt-0.5" />
+                      )}
+                      {detail}
                     </p>
                   </div>
                   {waHref && (
@@ -366,9 +431,9 @@ function DashboardPage() {
                 </Link>
               );
             })}
-            {overdueQueue.length > 8 && (
+            {actionQueue.length > 8 && (
               <p className="text-xs text-muted-foreground text-center pt-1">
-                +{overdueQueue.length - 8} lead(s) atrasado(s) — ver no CRM
+                +{actionQueue.length - 8} lead(s) pendente(s) — ver no CRM
               </p>
             )}
           </div>

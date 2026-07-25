@@ -16,7 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { supabase } from "@/integrations/supabase/client";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { toast } from "sonner";
-import { Trash2 } from "lucide-react";
+import { Trash2, CalendarPlus, MessageCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 
 interface CustomField {
@@ -44,6 +44,27 @@ function formatCallAt(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function formatApptForMessage(iso: string) {
+  const d = new Date(iso);
+  const weekday = d.toLocaleDateString("pt-BR", { weekday: "long" });
+  const day = d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+  const time = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  return `${weekday}, ${day} às ${time}`;
+}
+
+export function defaultReminderMessage(name: string, appointmentDate: string) {
+  const firstName = name.trim().split(" ")[0] || "";
+  return (
+    `Oi${firstName ? ` ${firstName}` : ""}! Passando para confirmar seu agendamento ` +
+    `${formatApptForMessage(appointmentDate)}. Qualquer dúvida, é só responder por aqui. Até breve!`
+  );
+}
+
+export function waLink(phoneE164: string, text?: string) {
+  const digits = phoneE164.replace("+", "");
+  return text ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : `https://wa.me/${digits}`;
 }
 
 const STAGES = [
@@ -122,6 +143,8 @@ export function LeadModal({
   const [newNote, setNewNote] = useState("");
   const [newCallAt, setNewCallAt] = useState(() => toDatetimeLocal(null));
   const [newCallAnswered, setNewCallAnswered] = useState<"sim" | "nao">("sim");
+  const [quickApptAt, setQuickApptAt] = useState(() => toDatetimeLocal(null));
+  const [reminderMsg, setReminderMsg] = useState("");
 
   const { data: options } = useQuery({
     queryKey: ["field_options"],
@@ -156,6 +179,9 @@ export function LeadModal({
         calls: lead.calls || [],
         custom_data: lead.custom_data || {},
       });
+      setReminderMsg(
+        lead.appointment_date ? defaultReminderMessage(lead.name, lead.appointment_date) : "",
+      );
     }
   }, [lead]);
 
@@ -242,6 +268,16 @@ export function LeadModal({
     onClose();
   }
 
+  function markScheduled() {
+    const iso = fromDatetimeLocal(quickApptAt);
+    setForm((f) => ({
+      ...f,
+      appointment_date: iso,
+      stage: f.stage === "novo" || f.stage === "contato" ? "agendado" : f.stage,
+    }));
+    setReminderMsg(defaultReminderMessage(form.name ?? "", iso));
+  }
+
   function addNote() {
     if (!newNote.trim()) return;
     const entry = { at: new Date().toISOString(), text: newNote.trim() };
@@ -257,6 +293,53 @@ export function LeadModal({
             {isNew ? "Novo Lead" : form.name || "Editar Lead"}
           </DialogTitle>
         </DialogHeader>
+
+        {!isNew && !form.appointment_date && form.stage !== "fechado" && form.stage !== "perdido" && (
+          <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#D97706]">
+              <CalendarPlus className="h-4 w-4" /> Sem agendamento marcado
+            </div>
+            <div className="flex flex-wrap items-end gap-2 mt-2">
+              <Input
+                type="datetime-local"
+                value={quickApptAt}
+                onChange={(e) => setQuickApptAt(e.target.value)}
+                className="w-auto"
+              />
+              <Button type="button" size="sm" onClick={markScheduled}>
+                Marcar agendamento
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {!isNew && form.appointment_date && (
+          <div className="rounded-lg border border-success/40 bg-success/5 p-3">
+            <div className="flex items-center gap-2 text-sm font-medium text-[#16A34A]">
+              <MessageCircle className="h-4 w-4" /> Lembrete —{" "}
+              {formatApptForMessage(form.appointment_date)}
+            </div>
+            <Textarea
+              className="mt-2 bg-background"
+              rows={3}
+              value={reminderMsg}
+              onChange={(e) => setReminderMsg(e.target.value)}
+            />
+            <div className="flex items-center justify-end mt-2">
+              {form.phone_e164 ? (
+                <Button type="button" size="sm" asChild>
+                  <a href={waLink(form.phone_e164, reminderMsg)} target="_blank" rel="noreferrer">
+                    Enviar no WhatsApp
+                  </a>
+                </Button>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Telefone inválido pra WhatsApp — confira o campo Telefone.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="mt-2 space-y-5">
           <div>
