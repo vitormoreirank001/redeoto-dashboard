@@ -43,8 +43,8 @@ function countBetween(items: { date: string }[], start: string, end: string) {
   return items.filter((i) => i.date >= start && i.date <= end).length;
 }
 
-const STAGE_LABEL: Record<string, { title: string; emoji: string }> = Object.fromEntries(
-  COLUMNS.map((c) => [c.id, { title: c.title, emoji: c.emoji }]),
+const STAGE_LABEL: Record<string, { title: string }> = Object.fromEntries(
+  COLUMNS.map((c) => [c.id, { title: c.title }]),
 );
 
 /** Há quanto tempo o lead está na etapa atual, em texto curto (min/h/d). */
@@ -383,7 +383,7 @@ function DashboardPage() {
                       <span className="text-sm font-medium truncate">{lead.name}</span>
                       {stageInfo && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground shrink-0">
-                          {stageInfo.emoji} {stageInfo.title}
+                          {stageInfo.title}
                         </span>
                       )}
                     </div>

@@ -64,13 +64,13 @@ export interface Lead {
 }
 
 export const COLUMNS = [
-  { id: "novo", title: "Novo Lead", emoji: "🆕" },
-  { id: "contato", title: "Contato Feito", emoji: "📞" },
-  { id: "agendado", title: "Agendado", emoji: "📅" },
-  { id: "orcamento", title: "Em Orçamento", emoji: "💰" },
-  { id: "followup", title: "Follow-up Ativo", emoji: "🔄" },
-  { id: "fechado", title: "Fechado", emoji: "✅" },
-  { id: "perdido", title: "Perdido", emoji: "❌" },
+  { id: "novo", title: "Novo Lead" },
+  { id: "contato", title: "Contato Feito" },
+  { id: "agendado", title: "Agendado" },
+  { id: "orcamento", title: "Em Orçamento" },
+  { id: "followup", title: "Follow-up Ativo" },
+  { id: "fechado", title: "Fechado" },
+  { id: "perdido", title: "Perdido" },
 ] as const;
 
 // service virou texto livre (era 3 opções fixas) — mantém a cor pras 3
@@ -507,10 +507,7 @@ function KanbanColumn({
       )}
     >
       <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-        <h3 className="text-sm font-semibold flex items-center gap-2">
-          <span>{col.emoji}</span>
-          {col.title}
-        </h3>
+        <h3 className="text-sm font-semibold flex items-center gap-2">{col.title}</h3>
         <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
           {items.length}
         </span>

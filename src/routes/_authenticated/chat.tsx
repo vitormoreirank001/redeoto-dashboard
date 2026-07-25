@@ -36,7 +36,7 @@ function timeline(lead: Lead): TimelineEntry[] {
 function previewText(entry: TimelineEntry | undefined): string {
   if (!entry) return "Sem contato registrado ainda";
   if (entry.kind === "note") return entry.text;
-  return entry.answered ? "📞 Ligação atendida" : "📞 Ligação não atendida";
+  return entry.answered ? "Ligação atendida" : "Ligação não atendida";
 }
 
 function relativeTime(iso: string): string {
@@ -241,13 +241,14 @@ function ChatPage() {
                     <div key={i} className="flex justify-center">
                       <div
                         className={cn(
-                          "text-xs px-3 py-1 rounded-full",
+                          "text-xs px-3 py-1 rounded-full inline-flex items-center gap-1.5",
                           entry.answered
                             ? "bg-success/15 text-[#16A34A]"
                             : "bg-destructive/15 text-destructive",
                         )}
                       >
-                        {entry.answered ? "📞 Ligação atendida" : "📞 Ligação não atendida"} ·{" "}
+                        <Phone className="h-3 w-3" />
+                        {entry.answered ? "Ligação atendida" : "Ligação não atendida"} ·{" "}
                         {new Date(entry.at).toLocaleString("pt-BR", {
                           day: "2-digit",
                           month: "2-digit",

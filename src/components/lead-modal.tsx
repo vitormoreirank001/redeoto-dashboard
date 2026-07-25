@@ -68,13 +68,13 @@ export function waLink(phoneE164: string, text?: string) {
 }
 
 const STAGES = [
-  { id: "novo", label: "🆕 Novo Lead" },
-  { id: "contato", label: "📞 Contato Feito" },
-  { id: "agendado", label: "📅 Agendado" },
-  { id: "orcamento", label: "💰 Em Orçamento" },
-  { id: "followup", label: "🔄 Follow-up Ativo" },
-  { id: "fechado", label: "✅ Fechado" },
-  { id: "perdido", label: "❌ Perdido" },
+  { id: "novo", label: "Novo Lead" },
+  { id: "contato", label: "Contato Feito" },
+  { id: "agendado", label: "Agendado" },
+  { id: "orcamento", label: "Em Orçamento" },
+  { id: "followup", label: "Follow-up Ativo" },
+  { id: "fechado", label: "Fechado" },
+  { id: "perdido", label: "Perdido" },
 ];
 
 const STAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
