@@ -258,124 +258,141 @@ export function LeadModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
-          <Field label="Nome *">
-            <Input value={form.name ?? ""} onChange={(e) => update("name", e.target.value)} />
-          </Field>
-          <Field label="Telefone">
-            <Input
-              value={form.phone ?? ""}
-              onChange={(e) => update("phone", e.target.value)}
-              placeholder="(31) 99999-0000"
-            />
-          </Field>
-          <Field label="Serviço de interesse">
-            <Select value={form.service} onValueChange={(v) => update("service", v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="implante">Implante</SelectItem>
-                <SelectItem value="aparelho">Aparelho</SelectItem>
-                <SelectItem value="outros">Outros</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Mídia (de onde veio)">
-            <Select value={form.media || undefined} onValueChange={(v) => update("media", v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a mídia" />
-              </SelectTrigger>
-              <SelectContent>
-                {(options?.midia ?? []).map((v) => (
-                  <SelectItem key={v} value={v}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Origem (como chegou)">
-            <Select value={form.origin || undefined} onValueChange={(v) => update("origin", v)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a origem" />
-              </SelectTrigger>
-              <SelectContent>
-                {(options?.origem ?? []).map((v) => (
-                  <SelectItem key={v} value={v}>
-                    {v}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Valor do orçamento (R$)">
-            <Input
-              type="number"
-              step="0.01"
-              value={form.budget_amount ?? ""}
-              onChange={(e) =>
-                update("budget_amount", e.target.value ? Number(e.target.value) : null)
-              }
-            />
-          </Field>
-          <Field label="Etapa">
-            <Select value={form.stage} onValueChange={(v) => update("stage", v)}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {STAGES.map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-          <Field label="Data de criação do lead">
-            <Input
-              type="datetime-local"
-              value={toDatetimeLocal(form.entry_date)}
-              onChange={(e) => update("entry_date", fromDatetimeLocal(e.target.value))}
-            />
-          </Field>
-          <Field label="Data do agendamento">
-            <Input
-              type="datetime-local"
-              value={form.appointment_date ? toDatetimeLocal(form.appointment_date) : ""}
-              onChange={(e) =>
-                update(
-                  "appointment_date",
-                  e.target.value ? fromDatetimeLocal(e.target.value) : null,
-                )
-              }
-            />
-          </Field>
-          <Field label="Financiamento?">
-            <Select
-              value={form.financing ?? ""}
-              onValueChange={(v) => update("financing", v || null)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="—" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="sim">Sim</SelectItem>
-                <SelectItem value="nao">Não</SelectItem>
-                <SelectItem value="analise">Em análise</SelectItem>
-              </SelectContent>
-            </Select>
-          </Field>
-          <div className="flex items-center gap-2 pt-7">
-            <Checkbox
-              id="urgent"
-              checked={!!form.urgent}
-              onCheckedChange={(c) => update("urgent", !!c)}
-            />
-            <Label htmlFor="urgent" className="cursor-pointer">
-              Marcar como Urgente
-            </Label>
+        <div className="mt-2 space-y-5">
+          <div>
+            <h4 className="text-sm font-semibold mb-3">Contato</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Nome *">
+                <Input value={form.name ?? ""} onChange={(e) => update("name", e.target.value)} />
+              </Field>
+              <Field label="Telefone">
+                <Input
+                  value={form.phone ?? ""}
+                  onChange={(e) => update("phone", e.target.value)}
+                  placeholder="(31) 99999-0000"
+                />
+              </Field>
+              <Field label="Mídia (de onde veio)">
+                <Select value={form.media || undefined} onValueChange={(v) => update("media", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a mídia" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(options?.midia ?? []).map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Origem (como chegou)">
+                <Select value={form.origin || undefined} onValueChange={(v) => update("origin", v)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a origem" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(options?.origem ?? []).map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold mb-3">Comercial</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Serviço de interesse">
+                <Select value={form.service} onValueChange={(v) => update("service", v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="implante">Implante</SelectItem>
+                    <SelectItem value="aparelho">Aparelho</SelectItem>
+                    <SelectItem value="outros">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Valor do orçamento (R$)">
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={form.budget_amount ?? ""}
+                  onChange={(e) =>
+                    update("budget_amount", e.target.value ? Number(e.target.value) : null)
+                  }
+                />
+              </Field>
+              <Field label="Financiamento?">
+                <Select
+                  value={form.financing ?? ""}
+                  onValueChange={(v) => update("financing", v || null)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sim">Sim</SelectItem>
+                    <SelectItem value="nao">Não</SelectItem>
+                    <SelectItem value="analise">Em análise</SelectItem>
+                  </SelectContent>
+                </Select>
+              </Field>
+              <div className="flex items-center gap-2 pt-7">
+                <Checkbox
+                  id="urgent"
+                  checked={!!form.urgent}
+                  onCheckedChange={(c) => update("urgent", !!c)}
+                />
+                <Label htmlFor="urgent" className="cursor-pointer">
+                  Marcar como Urgente
+                </Label>
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <h4 className="text-sm font-semibold mb-3">Etapa e agendamento</h4>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Field label="Etapa">
+                <Select value={form.stage} onValueChange={(v) => update("stage", v)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {STAGES.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </Field>
+              <Field label="Data de criação do lead">
+                <Input
+                  type="datetime-local"
+                  value={toDatetimeLocal(form.entry_date)}
+                  onChange={(e) => update("entry_date", fromDatetimeLocal(e.target.value))}
+                />
+              </Field>
+              <Field label="Data do agendamento">
+                <Input
+                  type="datetime-local"
+                  value={form.appointment_date ? toDatetimeLocal(form.appointment_date) : ""}
+                  onChange={(e) =>
+                    update(
+                      "appointment_date",
+                      e.target.value ? fromDatetimeLocal(e.target.value) : null,
+                    )
+                  }
+                />
+              </Field>
+            </div>
           </div>
         </div>
 
