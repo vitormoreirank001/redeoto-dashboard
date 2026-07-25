@@ -58,7 +58,7 @@ export interface Lead {
   stage_changed_at: string;
 }
 
-const COLUMNS = [
+export const COLUMNS = [
   { id: "novo", title: "Novo Lead", emoji: "🆕" },
   { id: "contato", title: "Contato Feito", emoji: "📞" },
   { id: "agendado", title: "Agendado", emoji: "📅" },

@@ -29,13 +29,19 @@ import {
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { isOverdue } from "@/lib/lead-sla";
+import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
+import { COLUMNS } from "./crm";
+import { MessageCircle } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
 });
 
 interface Lead {
+  id: string;
+  name: string;
+  phone: string | null;
+  phone_e164: string | null;
   entry_date: string;
   closed_at: string | null;
   appointment_date: string | null;
@@ -49,6 +55,20 @@ interface Lead {
 
 function countBetween(items: { date: string }[], start: string, end: string) {
   return items.filter((i) => i.date >= start && i.date <= end).length;
+}
+
+const STAGE_LABEL: Record<string, { title: string; emoji: string }> = Object.fromEntries(
+  COLUMNS.map((c) => [c.id, { title: c.title, emoji: c.emoji }]),
+);
+
+/** Há quanto tempo o lead está na etapa atual, em texto curto (min/h/d). */
+function timeInStage(iso: string): string {
+  const ms = Date.now() - new Date(iso).getTime();
+  const mins = Math.floor(ms / 60000);
+  if (mins < 60) return `${mins}min`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h`;
+  return `${Math.floor(hours / 24)}d`;
 }
 
 function DashboardPage() {
@@ -72,7 +92,7 @@ function DashboardPage() {
         supabase
           .from("leads")
           .select(
-            "entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,stage_changed_at,calls",
+            "id,name,phone,phone_e164,entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,stage_changed_at,calls",
           ),
         supabase
           .from("monthly_goals")
@@ -152,7 +172,10 @@ function DashboardPage() {
   const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
-  const overdueCount = leads.filter(isOverdue).length;
+  const overdueQueue = leads
+    .filter(isOverdue)
+    .sort((a, b) => new Date(a.stage_changed_at).getTime() - new Date(b.stage_changed_at).getTime());
+  const overdueCount = overdueQueue.length;
 
   return (
     <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto">
@@ -280,6 +303,76 @@ function DashboardPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl bg-card border border-border shadow-sm p-5">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-destructive" />
+            Contate agora
+          </h2>
+          {overdueCount > 0 && (
+            <Link to="/crm" className="text-xs text-primary hover:underline">
+              Ver todos no CRM
+            </Link>
+          )}
+        </div>
+
+        {overdueQueue.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">
+            Nenhum lead atrasado — tudo dentro do prazo.
+          </p>
+        ) : (
+          <div className="space-y-1.5">
+            {overdueQueue.slice(0, 8).map((lead) => {
+              const stageInfo = STAGE_LABEL[lead.stage];
+              const followupStep = overdueFollowupStep(lead);
+              const waHref = lead.phone_e164
+                ? `https://wa.me/${lead.phone_e164.replace("+", "")}`
+                : null;
+              return (
+                <Link
+                  key={lead.id}
+                  to="/crm"
+                  className="flex items-center gap-3 p-2.5 rounded-lg border border-transparent hover:border-border hover:bg-secondary/50 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{lead.name}</span>
+                      {stageInfo && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground shrink-0">
+                          {stageInfo.emoji} {stageInfo.title}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-destructive mt-0.5">
+                      {followupStep
+                        ? `Follow-up ${followupStep.label} atrasado`
+                        : `Há ${timeInStage(lead.stage_changed_at)} sem contato`}
+                    </p>
+                  </div>
+                  {waHref && (
+                    <a
+                      href={waHref}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="shrink-0 h-8 w-8 rounded-lg bg-success/15 text-[#16A34A] flex items-center justify-center hover:bg-success/25 transition-colors"
+                      title="Chamar no WhatsApp"
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                    </a>
+                  )}
+                </Link>
+              );
+            })}
+            {overdueQueue.length > 8 && (
+              <p className="text-xs text-muted-foreground text-center pt-1">
+                +{overdueQueue.length - 8} lead(s) atrasado(s) — ver no CRM
+              </p>
+            )}
+          </div>
+        )}
       </section>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
