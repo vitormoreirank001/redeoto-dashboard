@@ -19,6 +19,17 @@ import {
 } from "recharts";
 import { formatBRL, saleDay } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Search, Download, ArrowUpDown } from "lucide-react";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   component: StatsPage,
@@ -41,16 +52,26 @@ function rangeStart(r: Range): Date {
   return new Date(d.getFullYear(), d.getMonth(), 1);
 }
 
+type TxSortKey = "name" | "service" | "amount" | "date";
+
 function StatsPage() {
   const [range, setRange] = useState<Range>("30d");
+  const [txSearch, setTxSearch] = useState("");
+  const [txSort, setTxSort] = useState<{ key: TxSortKey; dir: "asc" | "desc" }>({
+    key: "date",
+    dir: "desc",
+  });
 
   const { data } = useQuery({
     queryKey: ["stats"],
     queryFn: async () => {
-      // Só agregados pro gráfico — sem nome/telefone/notas (PII) que esta tela não usa.
+      // Sem telefone/notas/histórico (PII que esta tela não precisa). "name" entrou
+      // de propósito pra tabela de Transações identificar quem é a venda/negociação.
       const leadsR = await supabase
         .from("leads")
-        .select("entry_date,appointment_date,stage,budget_amount,checklist,calls,closed_at");
+        .select(
+          "id,name,entry_date,appointment_date,stage,service,budget_amount,checklist,calls,closed_at,stage_changed_at",
+        );
       return { leads: leadsR.data ?? [] };
     },
   });
@@ -117,22 +138,84 @@ function StatsPage() {
     { name: "Venda", value: venda },
   ];
 
-  // Services breakdown
-  const svcMap: Record<string, { count: number; revenue: number }> = {
-    implante: { count: 0, revenue: 0 },
-    aparelho: { count: 0, revenue: 0 },
-    outros: { count: 0, revenue: 0 },
-  };
+  // Services breakdown — "service" virou texto livre, então agrupa pelo nome
+  // real digitado e dobra qualquer coisa além das 4 maiores em "Outros"
+  // (nunca gera uma cor nova pra série — regra de paleta categórica fixa).
+  const svcMap: Record<string, { count: number; revenue: number }> = {};
   salesInRange.forEach((l: any) => {
-    svcMap[l.service] = svcMap[l.service] || { count: 0, revenue: 0 };
-    svcMap[l.service].count++;
-    svcMap[l.service].revenue += Number(l.budget_amount || 0);
+    const key = (l.service || "").trim() || "Outros";
+    svcMap[key] = svcMap[key] || { count: 0, revenue: 0 };
+    svcMap[key].count++;
+    svcMap[key].revenue += Number(l.budget_amount || 0);
   });
-  const svcData = Object.entries(svcMap).map(([k, v]) => ({
-    name: k === "implante" ? "Implante" : k === "aparelho" ? "Aparelho" : "Outros",
-    count: v.count,
-    revenue: v.revenue,
-  }));
+  const svcSorted = Object.entries(svcMap).sort((a, b) => b[1].revenue - a[1].revenue);
+  const svcTop = svcSorted.slice(0, 4);
+  const svcRest = svcSorted.slice(4);
+  const svcData = svcTop.map(([name, v]) => ({ name, count: v.count, revenue: v.revenue }));
+  if (svcRest.length > 0) {
+    const folded = svcRest.reduce(
+      (acc, [, v]) => ({ count: acc.count + v.count, revenue: acc.revenue + v.revenue }),
+      { count: 0, revenue: 0 },
+    );
+    svcData.push({ name: "Outros", count: folded.count, revenue: folded.revenue });
+  }
+
+  // Transações: leads com valor em jogo (fechado/perdido/orçamento/follow-up),
+  // linha a linha, dentro do mesmo período selecionado no topo da página.
+  const TX_STATUS: Record<string, { label: string; cls: string }> = {
+    fechado: { label: "Concluído", cls: "bg-success/15 text-[#16A34A]" },
+    perdido: { label: "Perdido", cls: "bg-destructive/15 text-destructive" },
+    orcamento: { label: "Pendente", cls: "bg-warning/15 text-[#D97706]" },
+    followup: { label: "Pendente", cls: "bg-warning/15 text-[#D97706]" },
+  };
+  const transactions = (data?.leads ?? [])
+    .filter((l: any) => Number(l.budget_amount) > 0 && TX_STATUS[l.stage])
+    .map((l: any) => ({
+      id: l.id as string,
+      name: l.name as string,
+      service: (l.service as string)?.trim() || "—",
+      amount: Number(l.budget_amount || 0),
+      date: l.stage === "fechado" ? saleDay(l) : (l.stage_changed_at as string).slice(0, 10),
+      status: TX_STATUS[l.stage],
+    }))
+    .filter((t) => t.date >= startDay)
+    .filter(
+      (t) => !txSearch.trim() || t.name.toLowerCase().includes(txSearch.trim().toLowerCase()),
+    );
+
+  const txDir = txSort.dir === "asc" ? 1 : -1;
+  const sortedTransactions = [...transactions].sort((a, b) => {
+    if (txSort.key === "amount") return (a.amount - b.amount) * txDir;
+    if (txSort.key === "date") return a.date.localeCompare(b.date) * txDir;
+    return a[txSort.key].localeCompare(b[txSort.key]) * txDir;
+  });
+
+  function toggleTxSort(key: TxSortKey) {
+    setTxSort((s) =>
+      s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "desc" },
+    );
+  }
+
+  function exportTransactionsCsv() {
+    const header = ["Cliente", "Serviço", "Valor", "Data", "Status"];
+    const rows = sortedTransactions.map((t) => [
+      t.name,
+      t.service,
+      t.amount.toFixed(2),
+      t.date,
+      t.status.label,
+    ]);
+    const csv = [header, ...rows]
+      .map((r) => r.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `transacoes-${startDay}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 
   // Calls (agregadas por dia a partir da data/hora real de cada ligação registrada,
   // não a data de entrada do lead — um lead antigo pode receber uma ligação hoje)
@@ -162,7 +245,8 @@ function StatsPage() {
     color: "#0F172A",
   };
 
-  const SVC_COLORS = ["#2563EB", "#D97706", "#94A3B8"];
+  // Paleta categórica fixa do app (--chart-1..5) — ordem fixa, nunca cíclica.
+  const SVC_COLORS = ["#1B4FD8", "#64748B", "#16A34A", "#D97706", "#7C3AED"];
 
   return (
     <div className="p-4 lg:p-6 space-y-4 max-w-[1600px] mx-auto">
@@ -258,7 +342,7 @@ function StatsPage() {
               <Legend wrapperStyle={{ fontSize: 12 }} />
             </PieChart>
           </ResponsiveContainer>
-          <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 text-center">
             {svcData.map((s) => (
               <div key={s.name} className="bg-background rounded-md p-2 border border-border">
                 <p className="text-xs text-muted-foreground">{s.name}</p>
@@ -282,7 +366,115 @@ function StatsPage() {
           </ResponsiveContainer>
         </Card>
       </div>
+
+      <Card title="Transações">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Input
+              value={txSearch}
+              onChange={(e) => setTxSearch(e.target.value)}
+              placeholder="Procurar por cliente..."
+              className="pl-8 h-9"
+            />
+          </div>
+          <Button variant="outline" size="sm" onClick={exportTransactionsCsv}>
+            <Download className="h-3.5 w-3.5 mr-2" /> Exportar CSV
+          </Button>
+        </div>
+
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <SortableHead label="Cliente" sortKey="name" current={txSort} onSort={toggleTxSort} />
+                <SortableHead
+                  label="Serviço"
+                  sortKey="service"
+                  current={txSort}
+                  onSort={toggleTxSort}
+                />
+                <SortableHead
+                  label="Valor"
+                  sortKey="amount"
+                  current={txSort}
+                  onSort={toggleTxSort}
+                  align="right"
+                />
+                <SortableHead label="Data" sortKey="date" current={txSort} onSort={toggleTxSort} />
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sortedTransactions.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    Nenhuma transação neste período.
+                  </TableCell>
+                </TableRow>
+              )}
+              {sortedTransactions.map((t) => (
+                <TableRow key={t.id}>
+                  <TableCell className="font-medium">{t.name}</TableCell>
+                  <TableCell className="text-muted-foreground">{t.service}</TableCell>
+                  <TableCell className="text-right font-semibold text-primary">
+                    {formatBRL(t.amount)}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {new Date(t.date + "T00:00:00").toLocaleDateString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      year: "numeric",
+                    })}
+                  </TableCell>
+                  <TableCell>
+                    <span
+                      className={cn(
+                        "text-xs px-2 py-0.5 rounded-full font-medium",
+                        t.status.cls,
+                      )}
+                    >
+                      {t.status.label}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      </Card>
     </div>
+  );
+}
+
+function SortableHead({
+  label,
+  sortKey,
+  current,
+  onSort,
+  align,
+}: {
+  label: string;
+  sortKey: TxSortKey;
+  current: { key: TxSortKey; dir: "asc" | "desc" };
+  onSort: (key: TxSortKey) => void;
+  align?: "right";
+}) {
+  const active = current.key === sortKey;
+  return (
+    <TableHead className={align === "right" ? "text-right" : undefined}>
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cn(
+          "inline-flex items-center gap-1 hover:text-foreground transition-colors",
+          active && "text-foreground",
+        )}
+      >
+        {label}
+        <ArrowUpDown className={cn("h-3 w-3", active ? "opacity-100" : "opacity-40")} />
+      </button>
+    </TableHead>
   );
 }
 

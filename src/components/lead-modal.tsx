@@ -125,7 +125,7 @@ export function LeadModal({
     phone: "",
     origin: "",
     media: "",
-    service: "outros",
+    service: "",
     urgent: false,
     budget_amount: null,
     stage: "novo",
@@ -390,16 +390,11 @@ export function LeadModal({
             <h4 className="text-sm font-semibold mb-3">Comercial</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <Field label="Serviço de interesse">
-                <Select value={form.service} onValueChange={(v) => update("service", v)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="implante">Implante</SelectItem>
-                    <SelectItem value="aparelho">Aparelho</SelectItem>
-                    <SelectItem value="outros">Outros</SelectItem>
-                  </SelectContent>
-                </Select>
+                <Input
+                  value={form.service ?? ""}
+                  onChange={(e) => update("service", e.target.value)}
+                  placeholder="Ex: Limpeza, Canal, Clareamento..."
+                />
               </Field>
               <Field label="Valor do orçamento (R$)">
                 <Input

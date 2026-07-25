@@ -72,11 +72,17 @@ export const COLUMNS = [
   { id: "perdido", title: "Perdido", emoji: "❌" },
 ] as const;
 
+// service virou texto livre (era 3 opções fixas) — mantém a cor pras 3
+// legadas e cai num tom neutro pra qualquer nome novo que a equipe digitar.
 const SERVICE_LABEL: Record<string, { text: string; cls: string }> = {
   implante: { text: "Implante", cls: "bg-primary/15 text-primary" },
   aparelho: { text: "Aparelho", cls: "bg-warning/15 text-[#D97706]" },
   outros: { text: "Outros", cls: "bg-muted text-muted-foreground" },
 };
+
+function serviceTag(service: string) {
+  return SERVICE_LABEL[service] ?? { text: service || "—", cls: "bg-muted text-muted-foreground" };
+}
 
 const ALL = "__all__";
 
@@ -578,7 +584,7 @@ function LeadCardBody({ lead }: { lead: Lead }) {
       <div className="flex flex-wrap gap-1 mt-2">
         {lead.media && <Tag text={lead.media} cls="bg-secondary text-foreground" />}
         {lead.origin && <Tag text={lead.origin} cls="bg-success/15 text-[#16A34A]" />}
-        <Tag {...SERVICE_LABEL[lead.service]} />
+        <Tag {...serviceTag(lead.service)} />
       </div>
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
         <span className="text-[11px] text-muted-foreground">
