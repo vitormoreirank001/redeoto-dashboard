@@ -1,7 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -33,6 +33,9 @@ import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 
 export const Route = createFileRoute("/_authenticated/crm")({
   component: CRMPage,
+  validateSearch: (search: Record<string, unknown>): { lead?: string } => ({
+    lead: typeof search.lead === "string" ? search.lead : undefined,
+  }),
 });
 
 export interface Lead {
@@ -131,6 +134,8 @@ function periodRange(p: Period): { from: string | null; to: string | null } {
 
 function CRMPage() {
   const qc = useQueryClient();
+  const { lead: deepLinkedLeadId } = Route.useSearch();
+  const navigate = useNavigate({ from: Route.fullPath });
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [creating, setCreating] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -156,6 +161,17 @@ function CRMPage() {
       return (data as unknown as Lead[]) ?? [];
     },
   });
+
+  // Deep link vindo da fila "Contate agora" do Home (?lead=<id>): abre o modal
+  // direto e limpa o parâmetro pra não reabrir se a pessoa navegar de volta.
+  useEffect(() => {
+    if (!deepLinkedLeadId || leads.length === 0) return;
+    const found = leads.find((l) => l.id === deepLinkedLeadId);
+    if (found) {
+      setOpenLead(found);
+      navigate({ search: {}, replace: true });
+    }
+  }, [deepLinkedLeadId, leads, navigate]);
 
   const { data: options } = useQuery({
     queryKey: ["field_options"],

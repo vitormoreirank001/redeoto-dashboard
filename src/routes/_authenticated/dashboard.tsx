@@ -334,6 +334,7 @@ function DashboardPage() {
                 <Link
                   key={lead.id}
                   to="/crm"
+                  search={{ lead: lead.id }}
                   className="flex items-center gap-3 p-2.5 rounded-lg border border-transparent hover:border-border hover:bg-secondary/50 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
