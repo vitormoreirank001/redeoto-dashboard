@@ -10,7 +10,6 @@ import {
   FileText,
   CheckCircle2,
   PhoneCall,
-  PhoneIncoming,
   TrendingUp,
   AlertTriangle,
 } from "lucide-react";
@@ -390,8 +389,6 @@ function DashboardPage() {
         <MetricCard
           title="Agendamentos"
           icon={Calendar}
-          size="lg"
-          className="col-span-2"
           today={countBetween(apptByDate, t, t)}
           yesterday={countBetween(apptByDate, y, y)}
           week={countBetween(apptByDate, ws, t)}
@@ -422,23 +419,16 @@ function DashboardPage() {
           month={countBetween(salesByDate, ms, me)}
         />
         <MetricCard
-          title="Ligações Feitas"
+          title="Ligações"
           icon={PhoneCall}
           today={sumCalls("made", t, t)}
           yesterday={sumCalls("made", y, y)}
           week={sumCalls("made", ws, t)}
           month={made}
-        />
-        <MetricCard
-          title="Ligações Atendidas"
-          icon={PhoneIncoming}
-          today={sumCalls("answered", t, t)}
-          yesterday={sumCalls("answered", y, y)}
-          week={sumCalls("answered", ws, t)}
-          month={ans}
           footer={
             <p className="text-xs text-muted-foreground">
-              Atendimento: <span className="text-primary font-semibold">{rate}%</span>
+              Atendidas: <span className="text-foreground font-medium">{ans}</span> no mês ·{" "}
+              <span className="text-primary font-semibold">{rate}%</span> de atendimento
             </p>
           }
         />
