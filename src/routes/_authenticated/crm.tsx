@@ -2,6 +2,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  TouchSensor,
+  useDraggable,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -120,7 +133,7 @@ function CRMPage() {
   const qc = useQueryClient();
   const [openLead, setOpenLead] = useState<Lead | null>(null);
   const [creating, setCreating] = useState(false);
-  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterMedia, setFilterMedia] = useState(ALL);
   const [filterOrigin, setFilterOrigin] = useState(ALL);
@@ -165,14 +178,28 @@ function CRMPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
 
-  function onDragStart(id: string) {
-    setDraggingId(id);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    // Delay em vez de distance no touch: sem isso, o primeiro toque de um scroll
+    // de coluna já contaria como início de drag e travaria o scroll no celular.
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 8 } }),
+  );
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveId(String(event.active.id));
   }
-  function onDrop(stage: string) {
-    if (!draggingId) return;
-    moveStage.mutate({ id: draggingId, stage });
-    setDraggingId(null);
+
+  function handleDragEnd(event: DragEndEvent) {
+    setActiveId(null);
+    const stage = event.over?.id;
+    if (typeof stage !== "string") return;
+    const lead = leads.find((l) => l.id === event.active.id);
+    if (lead && lead.stage !== stage) {
+      moveStage.mutate({ id: lead.id, stage });
+    }
   }
+
+  const activeLead = activeId ? (leads.find((l) => l.id === activeId) ?? null) : null;
 
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -389,106 +416,25 @@ function CRMPage() {
         </div>
       )}
 
-      <div className="flex-1 overflow-x-auto overflow-y-hidden">
-        <div className="flex gap-4 h-full min-w-max pb-2">
-          {COLUMNS.map((col) => {
-            const items = filteredLeads.filter((l) => l.stage === col.id);
-            return (
-              <div
-                key={col.id}
-                className="w-72 shrink-0 flex flex-col bg-card border border-border rounded-xl shadow-sm"
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => onDrop(col.id)}
-              >
-                <div className="px-4 py-3 border-b border-border flex items-center justify-between">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <span>{col.emoji}</span>
-                    {col.title}
-                  </h3>
-                  <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
-                    {items.length}
-                  </span>
-                </div>
-                <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                  {items.map((lead) => {
-                    const overdue = isOverdue(lead);
-                    const followupStep = overdueFollowupStep(lead);
-                    return (
-                      <div
-                        key={lead.id}
-                        draggable
-                        onDragStart={() => onDragStart(lead.id)}
-                        onClick={() => setOpenLead(lead)}
-                        className={cn(
-                          "bg-background border rounded-lg p-3 cursor-pointer transition-colors",
-                          overdue
-                            ? "border-destructive/60 hover:border-destructive"
-                            : "border-border hover:border-primary/50",
-                          draggingId === lead.id && "opacity-50",
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-2">
-                          <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
-                          <div className="flex items-center gap-1 shrink-0">
-                            {overdue && (
-                              <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
-                                <AlertTriangle className="h-3 w-3" />
-                                {followupStep ? `Follow-up ${followupStep.label}` : "Atrasado"}
-                              </span>
-                            )}
-                            {lead.urgent && (
-                              <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium">
-                                Urgente
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                        {lead.phone && (
-                          <p className="text-xs text-muted-foreground mt-1">{lead.phone}</p>
-                        )}
-                        <div className="flex flex-wrap gap-1 mt-2">
-                          {lead.media && (
-                            <Tag text={lead.media} cls="bg-secondary text-foreground" />
-                          )}
-                          {lead.origin && (
-                            <Tag text={lead.origin} cls="bg-success/15 text-[#16A34A]" />
-                          )}
-                          <Tag {...SERVICE_LABEL[lead.service]} />
-                        </div>
-                        <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
-                          <span className="text-[11px] text-muted-foreground">
-                            {lead.stage === "fechado" && lead.closed_at
-                              ? `Venda ${new Date(lead.closed_at).toLocaleDateString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                })}`
-                              : new Date(lead.entry_date).toLocaleString("pt-BR", {
-                                  day: "2-digit",
-                                  month: "2-digit",
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                          </span>
-                          {lead.budget_amount && (
-                            <span className="text-xs font-semibold text-primary">
-                              {formatBRL(Number(lead.budget_amount))}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                  {items.length === 0 && (
-                    <div className="text-center py-8 text-xs text-muted-foreground/60">
-                      Sem leads
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          })}
+      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="flex-1 overflow-x-auto overflow-y-hidden">
+          <div className="flex gap-4 h-full min-w-max pb-2">
+            {COLUMNS.map((col) => {
+              const items = filteredLeads.filter((l) => l.stage === col.id);
+              return (
+                <KanbanColumn key={col.id} col={col} items={items} onOpen={setOpenLead} />
+              );
+            })}
+          </div>
         </div>
-      </div>
+        <DragOverlay>
+          {activeLead && (
+            <div className="w-72 bg-background border border-primary rounded-lg p-3 shadow-lg">
+              <LeadCardBody lead={activeLead} />
+            </div>
+          )}
+        </DragOverlay>
+      </DndContext>
 
       {(openLead || creating) && (
         <LeadModal
@@ -509,4 +455,117 @@ function CRMPage() {
 
 function Tag({ text, cls }: { text: string; cls: string }) {
   return <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium", cls)}>{text}</span>;
+}
+
+function KanbanColumn({
+  col,
+  items,
+  onOpen,
+}: {
+  col: (typeof COLUMNS)[number];
+  items: Lead[];
+  onOpen: (lead: Lead) => void;
+}) {
+  const { setNodeRef, isOver } = useDroppable({ id: col.id });
+  return (
+    <div
+      ref={setNodeRef}
+      className={cn(
+        "w-72 shrink-0 flex flex-col bg-card border rounded-xl shadow-sm transition-colors",
+        isOver ? "border-primary/60 bg-primary/5" : "border-border",
+      )}
+    >
+      <div className="px-4 py-3 border-b border-border flex items-center justify-between">
+        <h3 className="text-sm font-semibold flex items-center gap-2">
+          <span>{col.emoji}</span>
+          {col.title}
+        </h3>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-secondary text-muted-foreground font-medium">
+          {items.length}
+        </span>
+      </div>
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+        {items.map((lead) => (
+          <KanbanCard key={lead.id} lead={lead} onOpen={onOpen} />
+        ))}
+        {items.length === 0 && (
+          <div className="text-center py-8 text-xs text-muted-foreground/60">Sem leads</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void }) {
+  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+    id: lead.id,
+  });
+  const overdue = isOverdue(lead);
+  return (
+    <div
+      ref={setNodeRef}
+      {...listeners}
+      {...attributes}
+      onClick={() => onOpen(lead)}
+      style={{ transform: CSS.Translate.toString(transform) }}
+      className={cn(
+        "bg-background border rounded-lg p-3 cursor-pointer transition-colors touch-none",
+        overdue ? "border-destructive/60 hover:border-destructive" : "border-border hover:border-primary/50",
+        isDragging && "opacity-40",
+      )}
+    >
+      <LeadCardBody lead={lead} />
+    </div>
+  );
+}
+
+function LeadCardBody({ lead }: { lead: Lead }) {
+  const overdue = isOverdue(lead);
+  const followupStep = overdueFollowupStep(lead);
+  return (
+    <>
+      <div className="flex items-start justify-between gap-2">
+        <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
+        <div className="flex items-center gap-1 shrink-0">
+          {overdue && (
+            <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
+              <AlertTriangle className="h-3 w-3" />
+              {followupStep ? `Follow-up ${followupStep.label}` : "Atrasado"}
+            </span>
+          )}
+          {lead.urgent && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium">
+              Urgente
+            </span>
+          )}
+        </div>
+      </div>
+      {lead.phone && <p className="text-xs text-muted-foreground mt-1">{lead.phone}</p>}
+      <div className="flex flex-wrap gap-1 mt-2">
+        {lead.media && <Tag text={lead.media} cls="bg-secondary text-foreground" />}
+        {lead.origin && <Tag text={lead.origin} cls="bg-success/15 text-[#16A34A]" />}
+        <Tag {...SERVICE_LABEL[lead.service]} />
+      </div>
+      <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
+        <span className="text-[11px] text-muted-foreground">
+          {lead.stage === "fechado" && lead.closed_at
+            ? `Venda ${new Date(lead.closed_at).toLocaleDateString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+              })}`
+            : new Date(lead.entry_date).toLocaleString("pt-BR", {
+                day: "2-digit",
+                month: "2-digit",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+        </span>
+        {lead.budget_amount && (
+          <span className="text-xs font-semibold text-primary">
+            {formatBRL(Number(lead.budget_amount))}
+          </span>
+        )}
+      </div>
+    </>
+  );
 }
