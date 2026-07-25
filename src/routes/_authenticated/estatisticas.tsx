@@ -47,7 +47,10 @@ function StatsPage() {
   const { data } = useQuery({
     queryKey: ["stats"],
     queryFn: async () => {
-      const leadsR = await supabase.from("leads").select("*");
+      // Só agregados pro gráfico — sem nome/telefone/notas (PII) que esta tela não usa.
+      const leadsR = await supabase
+        .from("leads")
+        .select("entry_date,appointment_date,stage,budget_amount,checklist,calls,closed_at");
       return { leads: leadsR.data ?? [] };
     },
   });
