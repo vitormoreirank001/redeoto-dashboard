@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Fragment, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, CalendarDays } from "lucide-react";
+import { ChevronLeft, ChevronRight, CalendarDays, Plus } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -175,14 +175,32 @@ function AgendamentoPage() {
 
   return (
     <div className="p-4 lg:p-6 space-y-5">
-      <header className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Agendamento</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">
-            {periodLabel} · {countLabel}
-          </p>
+      <header>
+        <h1 className="text-2xl font-semibold tracking-tight">Agendamento</h1>
+        <p className="text-muted-foreground mt-0.5 text-sm">{countLabel}</p>
+      </header>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 bg-card border border-border rounded-xl shadow-sm px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="icon" onClick={() => shift(-1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" size="icon" onClick={() => shift(1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            onClick={() => setCreatingAt(slotDateTime(anchor, startHour, 0))}
+            className="ml-1"
+          >
+            <Plus className="h-4 w-4 mr-2" /> Adicionar Evento
+          </Button>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
+
+        <p className="text-base font-semibold capitalize order-first w-full text-center sm:order-none sm:w-auto">
+          {periodLabel}
+        </p>
+
+        <div className="flex items-center gap-2">
           <div className="flex items-center rounded-md border border-border overflow-hidden">
             {(
               [
@@ -205,17 +223,11 @@ function AgendamentoPage() {
               </button>
             ))}
           </div>
-          <Button variant="outline" size="icon" onClick={() => shift(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
           <Button variant="outline" onClick={() => setAnchor(new Date())}>
             <CalendarDays className="h-4 w-4 mr-2" /> Hoje
           </Button>
-          <Button variant="outline" size="icon" onClick={() => shift(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
         </div>
-      </header>
+      </div>
 
       {view === "month" ? (
         <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
@@ -259,11 +271,16 @@ function AgendamentoPage() {
                   >
                     {d.getDate()}
                   </div>
-                  <div className="mt-1 space-y-0.5">
+                  <div className="mt-1 space-y-1">
                     {dayLeads.slice(0, 3).map((l) => (
                       <div
                         key={l.id}
-                        className="text-[10px] truncate px-1 py-0.5 rounded bg-primary/10 text-primary"
+                        className={cn(
+                          "text-[10px] truncate pl-1.5 pr-1 py-0.5 rounded border-l-2 bg-secondary/60",
+                          l.urgent
+                            ? "border-l-[#7C3AED] text-[#7C3AED]"
+                            : "border-l-primary text-primary",
+                        )}
                       >
                         {l.name}
                       </div>
