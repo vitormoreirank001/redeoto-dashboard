@@ -175,7 +175,24 @@ function CRMPage() {
       const { error } = await supabase.from("leads").update({ stage }).eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["leads"] }),
+    onMutate: async ({ id, stage }) => {
+      await qc.cancelQueries({ queryKey: ["leads"] });
+      const previous = qc.getQueryData<Lead[]>(["leads"]);
+      qc.setQueryData<Lead[]>(
+        ["leads"],
+        (old) =>
+          old?.map((l) =>
+            l.id === id ? { ...l, stage, stage_changed_at: new Date().toISOString() } : l,
+          ) ?? old,
+      );
+      return { previous };
+    },
+    onError: (_err, _vars, context) => {
+      // Reverte pro estado anterior: card já tinha "pulado" de coluna na tela.
+      if (context?.previous) qc.setQueryData(["leads"], context.previous);
+      toast.error("Não foi possível mover o lead — tente novamente");
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ["leads"] }),
   });
 
   const sensors = useSensors(
