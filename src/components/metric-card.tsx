@@ -31,12 +31,12 @@ export function MetricCard({
     <div
       className={cn(
         "rounded-xl bg-card border border-border shadow-sm transition-colors",
-        lg ? "p-5" : "p-4",
+        lg ? "p-6" : "p-5",
         accent && "border-primary/40",
         className,
       )}
     >
-      <div className={cn("flex items-center justify-between", lg ? "mb-4" : "mb-3")}>
+      <div className={cn("flex items-center justify-between", lg ? "mb-5" : "mb-4")}>
         <h3 className={cn("font-medium text-muted-foreground", lg ? "text-base" : "text-sm")}>
           {title}
         </h3>
@@ -49,7 +49,7 @@ export function MetricCard({
           <Icon className={lg ? "h-4 w-4" : "h-3.5 w-3.5"} strokeWidth={1.75} />
         </div>
       </div>
-      <div className="grid grid-cols-4 gap-1.5">
+      <div className="grid grid-cols-4 gap-3">
         {[
           { label: "Hoje", value: today },
           { label: "Ontem", value: yesterday },
@@ -57,7 +57,7 @@ export function MetricCard({
           { label: "Mês", value: month },
         ].map((c) => (
           <div key={c.label} className="min-w-0">
-            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mb-0.5">
+            <p className="text-[9px] uppercase tracking-wider text-muted-foreground mb-1">
               {c.label}
             </p>
             <p className={cn("font-bold text-foreground truncate", lg ? "text-2xl" : "text-lg")}>
@@ -66,7 +66,7 @@ export function MetricCard({
           </div>
         ))}
       </div>
-      {footer && <div className="mt-2 pt-2 border-t border-border">{footer}</div>}
+      {footer && <div className="mt-3 pt-3 border-t border-border">{footer}</div>}
     </div>
   );
 }
