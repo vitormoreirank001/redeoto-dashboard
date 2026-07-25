@@ -10,7 +10,8 @@
 --
 -- Compatível com o SQL Editor do Supabase (sem o operador jsonb `?`, que o editor
 -- interpreta como placeholder de parâmetro — mesma pegadinha documentada em
--- 20260720000000_lead_closed_at.sql).
+-- 20260720000000_lead_closed_at.sql). O editor também tokeniza `@` dentro de
+-- string literal (ver chr(64) em normalize_phone_jid abaixo).
 
 -- ============================================================
 -- 1. normalize_phone_br: forma canônica +55DD9XXXXXXXX
@@ -113,7 +114,9 @@ BEGIN
   END IF;
 
   -- Aceita "5531998887777@s.whatsapp.net", "+55 31 99888-7777", etc.
-  d := regexp_replace(split_part(raw, '@', 1), '\D', '', 'g');
+  -- chr(64) em vez do literal '@': o SQL Editor do Supabase tokeniza '@' dentro
+  -- de string (mesma pegadinha documentada acima pro operador jsonb '?').
+  d := regexp_replace(split_part(raw, chr(64), 1), '\D', '', 'g');
 
   IF length(d) NOT IN (12, 13) OR left(d, 2) <> '55' THEN
     RETURN NULL;   -- sem código do país BR: não é nosso, não adivinha
