@@ -30,28 +30,14 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 import { COLUMNS } from "./crm";
+import type { Lead } from "./crm";
 import { CalendarPlus, MessageCircle } from "lucide-react";
 import { defaultReminderMessage, waLink } from "@/components/lead-modal";
+import { useLeads } from "@/hooks/use-leads";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
 });
-
-interface Lead {
-  id: string;
-  name: string;
-  phone: string | null;
-  phone_e164: string | null;
-  entry_date: string;
-  closed_at: string | null;
-  appointment_date: string | null;
-  stage: string;
-  budget_amount: number | null;
-  checklist: Record<string, boolean> | null;
-  updated_at: string;
-  stage_changed_at: string;
-  calls: Array<{ at: string; answered: boolean }>;
-}
 
 function countBetween(items: { date: string }[], start: string, end: string) {
   return items.filter((i) => i.date >= start && i.date <= end).length;
@@ -137,26 +123,18 @@ function DashboardPage() {
     });
   }, []);
 
-  const { data } = useQuery({
-    queryKey: ["dashboard"],
+  const { data: allLeads } = useLeads();
+
+  const { data: goalData } = useQuery({
+    queryKey: ["monthly_goal", new Date().getFullYear(), new Date().getMonth() + 1],
     queryFn: async () => {
-      const [leadsR, goalR] = await Promise.all([
-        supabase
-          .from("leads")
-          .select(
-            "id,name,phone,phone_e164,entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,stage_changed_at,calls",
-          ),
-        supabase
-          .from("monthly_goals")
-          .select("target_amount")
-          .eq("year", new Date().getFullYear())
-          .eq("month", new Date().getMonth() + 1)
-          .maybeSingle(),
-      ]);
-      return {
-        leads: (leadsR.data ?? []) as Lead[],
-        goal: goalR.data?.target_amount ?? 0,
-      };
+      const { data } = await supabase
+        .from("monthly_goals")
+        .select("target_amount")
+        .eq("year", new Date().getFullYear())
+        .eq("month", new Date().getMonth() + 1)
+        .maybeSingle();
+      return data;
     },
   });
 
@@ -185,7 +163,7 @@ function DashboardPage() {
   const ms = monthStartISO();
   const me = monthEndISO();
 
-  const leads = data?.leads ?? [];
+  const leads = allLeads ?? [];
   const entryDay = (l: Lead) => l.entry_date.slice(0, 10);
 
   const leadsByDate = leads.map((l) => ({ date: entryDay(l) }));
@@ -216,7 +194,7 @@ function DashboardPage() {
     .filter((l) => l.stage === "fechado" && saleDay(l) >= ms && saleDay(l) <= me)
     .reduce((a, l) => a + Number(l.budget_amount || 0), 0);
 
-  const goal = data?.goal ?? 0;
+  const goal = goalData?.target_amount ?? 0;
   const pct = goal > 0 ? Math.min(100, Math.round((revenueMonth / goal) * 100)) : 0;
   const missing = Math.max(0, goal - revenueMonth);
 

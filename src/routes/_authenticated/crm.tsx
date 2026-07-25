@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { formatBRL, saleDay } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
+import { useLeads } from "@/hooks/use-leads";
 
 export const Route = createFileRoute("/_authenticated/crm")({
   component: CRMPage,
@@ -157,17 +158,7 @@ function CRMPage() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
 
-  const { data: leads = [] } = useQuery({
-    queryKey: ["leads"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data as unknown as Lead[]) ?? [];
-    },
-  });
+  const { data: leads = [] } = useLeads();
 
   // Deep link vindo da fila "Contate agora" do Home (?lead=<id>): abre o modal
   // direto e limpa o parâmetro pra não reabrir se a pessoa navegar de volta.

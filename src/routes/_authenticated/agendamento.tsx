@@ -8,6 +8,7 @@ import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/routes/_authenticated/crm";
+import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
 
 export const Route = createFileRoute("/_authenticated/agendamento")({
   component: AgendamentoPage,
@@ -90,18 +91,19 @@ function AgendamentoPage() {
   const rangeStart = fmtKey(visibleDays[0]);
   const rangeEndExclusive = fmtKey(addDays(visibleDays[visibleDays.length - 1], 1));
 
-  const leadsQ = useQuery({
-    queryKey: ["leads_agenda", rangeStart, rangeEndExclusive],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("leads")
-        .select("*")
-        .gte("appointment_date", rangeStart)
-        .lt("appointment_date", rangeEndExclusive)
-        .order("appointment_date");
-      return (data ?? []) as unknown as Lead[];
-    },
-  });
+  // Reusa o cache compartilhado de leads (mesmo do CRM/Dashboard/Chat) em vez
+  // de buscar de novo — só filtra pelo período visível no cliente.
+  const { data: allLeads } = useLeads();
+  const agendaLeads = useMemo(
+    () =>
+      (allLeads ?? []).filter(
+        (l) =>
+          l.appointment_date &&
+          l.appointment_date >= rangeStart &&
+          l.appointment_date < rangeEndExclusive,
+      ),
+    [allLeads, rangeStart, rangeEndExclusive],
+  );
 
   const startHour = settingsQ.data?.agenda_start_hour ?? 8;
   const endHour = settingsQ.data?.agenda_end_hour ?? 18;
@@ -117,13 +119,13 @@ function AgendamentoPage() {
 
   const leadsByDay = useMemo(() => {
     const map: Record<string, Lead[]> = {};
-    (leadsQ.data ?? []).forEach((l) => {
+    agendaLeads.forEach((l) => {
       if (!l.appointment_date) return;
       const day = l.appointment_date.slice(0, 10);
       (map[day] ??= []).push(l);
     });
     return map;
-  }, [leadsQ.data]);
+  }, [agendaLeads]);
 
   function leadAt(dayKey: string, hour: number, minute: number): Lead | undefined {
     return leadsByDay[dayKey]?.find((l) => {
@@ -151,13 +153,13 @@ function AgendamentoPage() {
   const today = fmtKey(new Date());
 
   const totalCount = useMemo(() => {
-    if (view !== "month") return leadsQ.data?.length ?? 0;
-    return (leadsQ.data ?? []).filter((l) => {
+    if (view !== "month") return agendaLeads.length;
+    return agendaLeads.filter((l) => {
       if (!l.appointment_date) return false;
       const d = new Date(l.appointment_date);
       return d.getMonth() === anchor.getMonth() && d.getFullYear() === anchor.getFullYear();
     }).length;
-  }, [leadsQ.data, view, anchor]);
+  }, [agendaLeads, view, anchor]);
 
   const countLabel =
     view === "day"
@@ -371,8 +373,7 @@ function AgendamentoPage() {
           }}
           onSaved={() => {
             toast.success("Agendamento salvo");
-            qc.invalidateQueries({ queryKey: ["leads_agenda"] });
-            qc.invalidateQueries({ queryKey: ["leads"] });
+            qc.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
           }}
         />
       )}

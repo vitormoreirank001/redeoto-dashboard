@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useMemo, useState } from "react";
 import { Input } from "@/components/ui/input";
@@ -7,21 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Search, Send, Phone, StickyNote } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { waLink } from "@/components/lead-modal";
+import type { Lead } from "./crm";
+import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
 });
-
-interface Lead {
-  id: string;
-  name: string;
-  phone: string | null;
-  phone_e164: string | null;
-  urgent: boolean;
-  history: Array<{ at: string; text: string }>;
-  calls: Array<{ at: string; answered: boolean }>;
-}
 
 type TimelineEntry =
   | { kind: "note"; at: string; text: string }
@@ -74,16 +66,7 @@ function ChatPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
 
-  const { data: leads = [] } = useQuery({
-    queryKey: ["chat_leads"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("id,name,phone,phone_e164,urgent,history,calls");
-      if (error) throw error;
-      return (data ?? []) as unknown as Lead[];
-    },
-  });
+  const { data: leads = [] } = useLeads();
 
   const sorted = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -116,7 +99,7 @@ function ChatPage() {
       toast.error(error.message);
       return false;
     }
-    qc.invalidateQueries({ queryKey: ["chat_leads"] });
+    qc.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
     return true;
   }
 
