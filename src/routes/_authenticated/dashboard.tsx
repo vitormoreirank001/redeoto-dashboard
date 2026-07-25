@@ -43,6 +43,7 @@ interface Lead {
   budget_amount: number | null;
   checklist: Record<string, boolean> | null;
   updated_at: string;
+  stage_changed_at: string;
   calls: Array<{ at: string; answered: boolean }>;
 }
 
@@ -71,7 +72,7 @@ function DashboardPage() {
         supabase
           .from("leads")
           .select(
-            "entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,calls",
+            "entry_date,closed_at,appointment_date,stage,budget_amount,checklist,updated_at,stage_changed_at,calls",
           ),
         supabase
           .from("monthly_goals")

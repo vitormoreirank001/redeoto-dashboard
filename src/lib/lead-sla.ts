@@ -1,6 +1,6 @@
 export interface SlaLead {
   stage: string;
-  updated_at: string;
+  stage_changed_at: string;
   entry_date: string;
   checklist: Record<string, boolean> | null;
 }
@@ -27,6 +27,6 @@ export function overdueFollowupStep(lead: SlaLead) {
 
 export function isOverdue(lead: SlaLead) {
   const sla = SLA_MS[lead.stage];
-  if (sla && Date.now() - new Date(lead.updated_at).getTime() > sla) return true;
+  if (sla && Date.now() - new Date(lead.stage_changed_at).getTime() > sla) return true;
   return !!overdueFollowupStep(lead);
 }

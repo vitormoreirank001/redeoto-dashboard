@@ -42,6 +42,7 @@ export interface Lead {
   calls: Array<{ at: string; answered: boolean }>;
   custom_data: Record<string, string | number | boolean | null>;
   updated_at: string;
+  stage_changed_at: string;
 }
 
 const COLUMNS = [
