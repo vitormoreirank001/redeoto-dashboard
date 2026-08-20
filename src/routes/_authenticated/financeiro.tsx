@@ -24,7 +24,7 @@ import {
   Percent,
 } from "lucide-react";
 import { toast } from "sonner";
-import { formatBRL, saleDay } from "@/lib/date-ranges";
+import { formatBRL, saleDay, toLocalISO } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import {
   Table,
@@ -86,7 +86,7 @@ function FinanceiroContent() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("outros");
   const [amount, setAmount] = useState("");
-  const [expenseDate, setExpenseDate] = useState(new Date().toISOString().slice(0, 10));
+  const [expenseDate, setExpenseDate] = useState(toLocalISO(new Date()));
 
   const expensesQ = useQuery({
     queryKey: ["expenses"],

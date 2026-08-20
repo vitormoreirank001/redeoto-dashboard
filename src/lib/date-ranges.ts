@@ -1,11 +1,27 @@
+/**
+ * Data (YYYY-MM-DD) no calendário LOCAL do navegador, sem passar por UTC.
+ *
+ * `Date.toISOString()` sempre converte pra UTC — no Brasil (UTC-3), isso troca
+ * o dia silenciosamente todo fim de noite (~21h-23h59): "agora" já cai no dia
+ * seguinte em UTC, e `todayISO()`/`weekStartISO()` passavam a achar que "hoje"
+ * era amanhã. `toLocalISO` lê ano/mês/dia direto dos getters locais do Date,
+ * então funciona em qualquer hora do dia e em qualquer fuso.
+ */
+export function toLocalISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalISO(new Date());
 }
 
 export function yesterdayISO(): string {
   const d = new Date();
   d.setDate(d.getDate() - 1);
-  return d.toISOString().slice(0, 10);
+  return toLocalISO(d);
 }
 
 export function weekStartISO(): string {
@@ -13,17 +29,17 @@ export function weekStartISO(): string {
   const day = d.getDay(); // 0 sun
   const diff = day === 0 ? 6 : day - 1; // monday-start
   d.setDate(d.getDate() - diff);
-  return d.toISOString().slice(0, 10);
+  return toLocalISO(d);
 }
 
 export function monthStartISO(): string {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth(), 1).toISOString().slice(0, 10);
+  return toLocalISO(new Date(d.getFullYear(), d.getMonth(), 1));
 }
 
 export function monthEndISO(): string {
   const d = new Date();
-  return new Date(d.getFullYear(), d.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return toLocalISO(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
 
 /**

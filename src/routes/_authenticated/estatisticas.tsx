@@ -17,7 +17,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { formatBRL, saleDay } from "@/lib/date-ranges";
+import { formatBRL, saleDay, toLocalISO } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -77,7 +77,7 @@ function StatsPage() {
   });
 
   const start = rangeStart(range);
-  const startDay = start.toISOString().slice(0, 10);
+  const startDay = toLocalISO(start);
 
   // Captação (funil, leads/dia): leads que ENTRARAM no período.
   const leads = (data?.leads ?? []).filter((l: any) => new Date(l.entry_date) >= start);
@@ -93,7 +93,7 @@ function StatsPage() {
     const days: Record<string, { date: string; leads: number; agend: number; vendas: number }> = {};
     const end = new Date();
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
-      const k = d.toISOString().slice(0, 10);
+      const k = toLocalISO(d);
       days[k] = { date: k, leads: 0, agend: 0, vendas: 0 };
     }
     leads.forEach((l: any) => {
@@ -226,7 +226,7 @@ function StatsPage() {
   (data?.leads ?? []).forEach((l: any) => {
     (l.calls ?? []).forEach((c: { at: string; answered: boolean }) => {
       const k = c.at.slice(0, 10);
-      if (k < start.toISOString().slice(0, 10)) return;
+      if (k < toLocalISO(start)) return;
       if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
       callsByDay[k].calls_made += 1;
       if (c.answered) callsByDay[k].calls_answered += 1;

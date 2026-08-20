@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
+import { toLocalISO } from "@/lib/date-ranges";
 
 export const Route = createFileRoute("/_authenticated/agendamento")({
   component: AgendamentoPage,
@@ -55,7 +56,7 @@ function addDays(d: Date, n: number) {
 }
 
 function fmtKey(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return toLocalISO(d);
 }
 
 function AgendamentoPage() {
