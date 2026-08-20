@@ -128,10 +128,16 @@ function AgendamentoPage() {
     return map;
   }, [agendaLeads]);
 
+  // Casa pelo INTERVALO do slot, não pelo minuto exato — um agendamento marcado
+  // em horário quebrado (ex.: 09:15 com grade de 30min) cai no slot 09:00, em
+  // vez de sumir da Semana/Dia por não bater minuto a minuto com nenhuma linha.
   function leadAt(dayKey: string, hour: number, minute: number): Lead | undefined {
+    const slotStart = hour * 60 + minute;
+    const slotEnd = slotStart + slotMinutes;
     return leadsByDay[dayKey]?.find((l) => {
       const dt = new Date(l.appointment_date!);
-      return dt.getHours() === hour && dt.getMinutes() === minute;
+      const m = dt.getHours() * 60 + dt.getMinutes();
+      return m >= slotStart && m < slotEnd;
     });
   }
 
@@ -351,7 +357,18 @@ function AgendamentoPage() {
                       )}
                     >
                       {lead ? (
-                        <div className="font-medium text-primary truncate">{lead.name}</div>
+                        <div className="font-medium text-primary truncate">
+                          {lead.name}
+                          {lead.appointment_date && (
+                            <span className="font-normal text-primary/70">
+                              {" · "}
+                              {new Date(lead.appointment_date).toLocaleTimeString("pt-BR", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="opacity-0 group-hover:opacity-100">Disponível</span>
                       )}
