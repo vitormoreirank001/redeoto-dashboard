@@ -131,10 +131,12 @@ function AgendamentoPage() {
   // Casa pelo INTERVALO do slot, não pelo minuto exato — um agendamento marcado
   // em horário quebrado (ex.: 09:15 com grade de 30min) cai no slot 09:00, em
   // vez de sumir da Semana/Dia por não bater minuto a minuto com nenhuma linha.
-  function leadAt(dayKey: string, hour: number, minute: number): Lead | undefined {
+  // Retorna TODOS os leads do slot (não só o primeiro) — dois agendamentos no
+  // mesmo intervalo (ex.: 15:00 e 15:15) precisam aparecer os dois, não só um.
+  function leadsAt(dayKey: string, hour: number, minute: number): Lead[] {
     const slotStart = hour * 60 + minute;
     const slotEnd = slotStart + slotMinutes;
-    return leadsByDay[dayKey]?.find((l) => {
+    return (leadsByDay[dayKey] ?? []).filter((l) => {
       const dt = new Date(l.appointment_date!);
       const m = dt.getHours() * 60 + dt.getMinutes();
       return m >= slotStart && m < slotEnd;
@@ -341,38 +343,42 @@ function AgendamentoPage() {
                 </div>
                 {visibleDays.map((d) => {
                   const dayKey = fmtKey(d);
-                  const lead = leadAt(dayKey, hour, minute);
+                  const cellLeads = leadsAt(dayKey, hour, minute);
                   return (
-                    <button
+                    <div
                       key={`${dayKey}-${hour}-${minute}`}
-                      onClick={() => {
-                        if (lead) setOpenLead(lead);
-                        else setCreatingAt(slotDateTime(d, hour, minute));
-                      }}
-                      className={cn(
-                        "border-b border-l border-border p-1.5 text-left min-h-[44px] text-xs transition-colors",
-                        lead
-                          ? "bg-primary/10 hover:bg-primary/15"
-                          : "hover:bg-muted/60 text-muted-foreground/50",
-                      )}
+                      className="border-b border-l border-border p-1 min-h-[44px] text-xs flex flex-col gap-1"
                     >
-                      {lead ? (
-                        <div className="font-medium text-primary truncate">
-                          {lead.name}
-                          {lead.appointment_date && (
-                            <span className="font-normal text-primary/70">
-                              {" · "}
-                              {new Date(lead.appointment_date).toLocaleTimeString("pt-BR", {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                          )}
-                        </div>
+                      {cellLeads.length > 0 ? (
+                        cellLeads.map((lead) => (
+                          <button
+                            key={lead.id}
+                            onClick={() => setOpenLead(lead)}
+                            className="w-full text-left rounded p-1 bg-primary/10 hover:bg-primary/15 transition-colors"
+                          >
+                            <div className="font-medium text-primary truncate">
+                              {lead.name}
+                              {lead.appointment_date && (
+                                <span className="font-normal text-primary/70">
+                                  {" · "}
+                                  {new Date(lead.appointment_date).toLocaleTimeString("pt-BR", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        ))
                       ) : (
-                        <span className="opacity-0 group-hover:opacity-100">Disponível</span>
+                        <button
+                          onClick={() => setCreatingAt(slotDateTime(d, hour, minute))}
+                          className="w-full h-full text-left text-muted-foreground/50 hover:bg-muted/60 transition-colors"
+                        >
+                          <span className="opacity-0 group-hover:opacity-100">Disponível</span>
+                        </button>
                       )}
-                    </button>
+                    </div>
                   );
                 })}
               </Fragment>
