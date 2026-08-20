@@ -127,7 +127,10 @@ function StatsPage() {
   const orcamento = leads.filter(
     (l: any) => l.checklist?.orcamento_apresentado || ["orcamento", "fechado"].includes(l.stage),
   ).length;
-  const venda = leads.filter((l: any) => l.stage === "fechado").length;
+  // Venda usa o mesmo critério de saleDay (fechamento) do resto da tela — não
+  // entry_date. Senão um lead que entrou fora do período mas fechou dentro dele
+  // conta em "Vendas"/faturamento mas some do funil (e vice-versa).
+  const venda = salesInRange.length;
 
   const funnel = [
     { name: "Leads", value: total },
@@ -295,7 +298,7 @@ function StatsPage() {
             <Line
               type="monotone"
               dataKey="vendas"
-              stroke="#2563EB"
+              stroke="#1B4FD8"
               strokeWidth={2.5}
               name="Vendas"
             />
@@ -307,8 +310,8 @@ function StatsPage() {
         <div className="space-y-2">
           {funnel.map((f, i) => {
             const prev = i === 0 ? f.value : funnel[i - 1].value;
-            const rate = prev > 0 ? Math.round((f.value / prev) * 100) : 0;
-            const width = total > 0 ? Math.max(15, (f.value / total) * 100) : 15;
+            const rate = prev > 0 ? Math.min(100, Math.round((f.value / prev) * 100)) : 0;
+            const width = total > 0 ? Math.min(100, Math.max(15, (f.value / total) * 100)) : 15;
             return (
               <div key={f.name} className="flex items-center gap-4">
                 <div className="w-24 text-sm text-muted-foreground">{f.name}</div>
@@ -361,7 +364,7 @@ function StatsPage() {
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
               <Bar dataKey="feitas" fill="#94A3B8" name="Feitas" />
-              <Bar dataKey="atendidas" fill="#2563EB" name="Atendidas" />
+              <Bar dataKey="atendidas" fill="#1B4FD8" name="Atendidas" />
             </BarChart>
           </ResponsiveContainer>
         </Card>

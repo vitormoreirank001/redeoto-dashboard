@@ -27,6 +27,7 @@ import {
   MessageCircle,
   Copy,
   ShieldAlert,
+  BellRing,
 } from "lucide-react";
 import {
   Table,
@@ -92,12 +93,27 @@ function SettingsContent() {
     queryFn: async () => {
       const { data } = await supabase
         .from("app_settings")
-        .select("logo_url,whatsapp_webhook_token,whatsapp_connected_at")
+        .select("logo_url,whatsapp_webhook_token,whatsapp_connected_at,notify_overdue_leads")
         .eq("id", true)
         .maybeSingle();
       return data;
     },
   });
+
+  // ---- Notificação de leads atrasados ----
+  async function toggleOverdueNotifications(checked: boolean) {
+    if (checked && typeof Notification !== "undefined" && Notification.permission === "default") {
+      await Notification.requestPermission();
+    }
+    const { error } = await supabase
+      .from("app_settings")
+      .update({ notify_overdue_leads: checked })
+      .eq("id", true);
+    if (error) return toast.error(error.message);
+    toast.success(checked ? "Notificação de leads atrasados ativada" : "Notificação desativada");
+    qc.invalidateQueries({ queryKey: ["app_settings"] });
+    qc.invalidateQueries({ queryKey: ["app_settings_notify"] });
+  }
 
   async function uploadLogo(file: File) {
     setUploading(true);
@@ -375,6 +391,22 @@ function SettingsContent() {
             </p>
           </div>
           <Switch checked={theme === "dark"} onCheckedChange={toggleTheme} />
+        </div>
+      </Section>
+
+      <Section title="Notificações" icon={<BellRing className="h-4 w-4 text-primary" />}>
+        <div className="flex items-center justify-between max-w-sm">
+          <div>
+            <p className="text-sm font-medium">Avisar sobre leads atrasados</p>
+            <p className="text-xs text-muted-foreground">
+              Toast na tela + notificação do navegador (aba em segundo plano) quando um lead fica
+              sem contato dentro do prazo. Vale para toda a equipe.
+            </p>
+          </div>
+          <Switch
+            checked={settingsQ.data?.notify_overdue_leads ?? true}
+            onCheckedChange={toggleOverdueNotifications}
+          />
         </div>
       </Section>
 

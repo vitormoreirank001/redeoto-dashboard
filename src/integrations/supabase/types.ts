@@ -15,6 +15,7 @@ export type Database = {
           agenda_start_hour: number;
           id: boolean;
           logo_url: string | null;
+          notify_overdue_leads: boolean;
           updated_at: string;
           whatsapp_connected_at: string | null;
           whatsapp_webhook_token: string;
@@ -25,6 +26,7 @@ export type Database = {
           agenda_start_hour?: number;
           id?: boolean;
           logo_url?: string | null;
+          notify_overdue_leads?: boolean;
           updated_at?: string;
           whatsapp_connected_at?: string | null;
           whatsapp_webhook_token?: string;
@@ -35,6 +37,7 @@ export type Database = {
           agenda_start_hour?: number;
           id?: boolean;
           logo_url?: string | null;
+          notify_overdue_leads?: boolean;
           updated_at?: string;
           whatsapp_connected_at?: string | null;
           whatsapp_webhook_token?: string;

@@ -15,6 +15,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { cn } from "@/lib/utils";
 import { useQueryClient } from "@tanstack/react-query";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useOverdueNotifications } from "@/hooks/use-overdue-notifications";
 
 const navItems = [
   {
@@ -69,6 +70,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   const qc = useQueryClient();
   const { isAdmin } = useUserRole();
   const visibleNavItems = navItems.filter((item) => !item.adminOnly || isAdmin);
+  useOverdueNotifications();
   const [userName, setUserName] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
