@@ -61,6 +61,7 @@ export interface Lead {
   custom_data: Record<string, string | number | boolean | null>;
   updated_at: string;
   stage_changed_at: string;
+  last_inbound_at: string | null;
 }
 
 export const COLUMNS = [

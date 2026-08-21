@@ -1,42 +1,28 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Send, Phone, StickyNote } from "lucide-react";
+import { Search, Send } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { waLink } from "@/components/lead-modal";
 import type { Lead } from "./crm";
-import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
-import { toast } from "sonner";
+import { useLeads } from "@/hooks/use-leads";
+import { useMessages, useSendMessage } from "@/hooks/use-messages";
+import { MessageBubble } from "@/components/chat/message-bubble";
+import { LeadPanel } from "@/components/chat/lead-panel";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
 });
 
-type TimelineEntry =
-  | { kind: "note"; at: string; text: string }
-  | { kind: "call"; at: string; answered: boolean };
-
-function timeline(lead: Lead): TimelineEntry[] {
-  const notes: TimelineEntry[] = (lead.history ?? []).map((h) => ({
-    kind: "note",
-    at: h.at,
-    text: h.text,
-  }));
-  const calls: TimelineEntry[] = (lead.calls ?? []).map((c) => ({
-    kind: "call",
-    at: c.at,
-    answered: c.answered,
-  }));
-  return [...notes, ...calls].sort((a, b) => a.at.localeCompare(b.at));
-}
-
-function previewText(entry: TimelineEntry | undefined): string {
-  if (!entry) return "Sem contato registrado ainda";
-  if (entry.kind === "note") return entry.text;
-  return entry.answered ? "Ligação atendida" : "Ligação não atendida";
+/**
+ * "Última atividade" do lead pra ordenar a lista, sem precisar buscar as
+ * mensagens de todo mundo (N+1). last_inbound_at é mantido automaticamente
+ * pelo trigger trg_messages_touch_lead a cada mensagem recebida; caindo pra
+ * stage_changed_at/updated_at enquanto não há nenhuma mensagem real ainda
+ * (Uazapi ainda não conectada) — mesma ideia da régua de SLA da automation_foundation.
+ */
+function lastActivity(lead: Lead): string | null {
+  return lead.last_inbound_at ?? lead.stage_changed_at ?? lead.updated_at ?? null;
 }
 
 function relativeTime(iso: string): string {
@@ -61,20 +47,20 @@ function initials(name: string): string {
 }
 
 function ChatPage() {
-  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: leads = [] } = useLeads();
+  const selected = leads.find((l) => l.id === selectedId) ?? null;
+  const { data: messages = [] } = useMessages(selectedId);
+  const sendMessage = useSendMessage(selectedId);
 
   const sorted = useMemo(() => {
     const q = search.trim().toLowerCase();
     return leads
-      .map((lead) => {
-        const t = timeline(lead);
-        return { lead, t, last: t.length ? t[t.length - 1].at : null };
-      })
+      .map((lead) => ({ lead, last: lastActivity(lead) }))
       .filter(({ lead }) => !q || lead.name.toLowerCase().includes(q))
       .sort((a, b) => {
         if (!a.last && !b.last) return a.lead.name.localeCompare(b.lead.name);
@@ -84,52 +70,34 @@ function ChatPage() {
       });
   }, [leads, search]);
 
-  const selected = leads.find((l) => l.id === selectedId) ?? null;
-  const selectedTimeline = selected ? timeline(selected) : [];
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages.length]);
 
-  async function persistNote(text: string) {
-    if (!selected) return false;
-    const entry = { at: new Date().toISOString(), text };
-    const newHistory = [entry, ...(selected.history ?? [])];
-    const { error } = await supabase
-      .from("leads")
-      .update({ history: newHistory })
-      .eq("id", selected.id);
-    if (error) {
-      toast.error(error.message);
-      return false;
-    }
-    qc.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
-    return true;
-  }
-
-  async function saveNoteOnly() {
-    const text = draft.trim();
-    if (!text) return;
-    if (await persistNote(text)) setDraft("");
-  }
-
-  async function sendMessage() {
+  async function handleSend() {
     const text = draft.trim();
     if (!text || !selected) return;
-    if (!(await persistNote(text))) return;
-    if (selected.phone_e164) {
-      window.open(waLink(selected.phone_e164, text), "_blank");
-    }
     setDraft("");
+    await sendMessage.mutateAsync(text);
   }
 
   return (
     <div className="p-4 lg:p-6 space-y-4 h-[calc(100dvh-3.5rem-4rem)] lg:h-screen flex flex-col">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Chat</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Conversas</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">
-          Histórico de contato por lead — notas e ligações, mais recente primeiro.
+          Mensagens de WhatsApp por lead — texto, áudio, foto e vídeo.
         </p>
       </header>
 
-      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[320px_1fr] bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-        <div className={cn("border-r border-border flex-col min-h-0", selected ? "hidden md:flex" : "flex")}>
+      <div className="flex-1 min-h-0 grid grid-cols-1 md:grid-cols-[300px_1fr] xl:grid-cols-[300px_320px_1fr] bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+        {/* Coluna 1: lista de conversas */}
+        <div
+          className={cn(
+            "border-r border-border flex-col min-h-0",
+            selected ? "hidden md:flex" : "flex",
+          )}
+        >
           <div className="p-3 border-b border-border shrink-0">
             <div className="relative">
               <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
@@ -147,7 +115,7 @@ function ChatPage() {
                 Nenhum lead encontrado.
               </p>
             )}
-            {sorted.map(({ lead, t, last }) => (
+            {sorted.map(({ lead, last }) => (
               <button
                 key={lead.id}
                 onClick={() => setSelectedId(lead.id)}
@@ -169,7 +137,7 @@ function ChatPage() {
                     )}
                   </div>
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
-                    {previewText(t[t.length - 1])}
+                    {lead.phone || "Sem telefone"}
                   </p>
                 </div>
                 {lead.urgent && <span className="h-2 w-2 rounded-full bg-[#7C3AED] shrink-0" />}
@@ -178,111 +146,58 @@ function ChatPage() {
           </div>
         </div>
 
-        <div className={cn("flex-col min-h-0", selected ? "flex" : "hidden md:flex")}>
+        {/* Coluna 3: thread + composer (ordem no DOM antes do painel do lead pra
+            funcionar em mobile: só lista OU só thread aparece, o painel do lead
+            fica escondido em telas pequenas, igual o comportamento anterior) */}
+        <div className={cn("flex-col min-h-0 xl:order-3", selected ? "flex" : "hidden md:flex")}>
           {!selected ? (
             <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">
               Selecione uma conversa
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between gap-3 p-3 border-b border-border shrink-0">
-                <div className="flex items-center gap-3 min-w-0">
-                  <button
-                    onClick={() => setSelectedId(null)}
-                    className="md:hidden text-muted-foreground px-1"
-                  >
-                    ←
-                  </button>
-                  <div className="h-9 w-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
-                    {initials(selected.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold truncate">{selected.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">
-                      {selected.phone || "Sem telefone"}
-                    </p>
-                  </div>
+              <div className="flex items-center gap-3 p-3 border-b border-border shrink-0">
+                <button
+                  onClick={() => setSelectedId(null)}
+                  className="md:hidden text-muted-foreground px-1"
+                >
+                  ←
+                </button>
+                <div className="h-9 w-9 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-semibold shrink-0">
+                  {initials(selected.name)}
                 </div>
-                {selected.phone_e164 && (
-                  <a
-                    href={waLink(selected.phone_e164)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="h-9 w-9 rounded-lg bg-success/15 text-[#16A34A] flex items-center justify-center hover:bg-success/25 transition-colors shrink-0"
-                    title="Abrir WhatsApp"
-                  >
-                    <Phone className="h-4 w-4" />
-                  </a>
-                )}
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold truncate">{selected.name}</p>
+                  <p className="text-xs text-muted-foreground truncate">
+                    {selected.phone || "Sem telefone"}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {selectedTimeline.length === 0 && (
+              <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+                {messages.length === 0 && (
                   <p className="text-sm text-muted-foreground text-center py-8">
-                    Sem notas ou ligações registradas ainda.
+                    Nenhuma mensagem ainda. As conversas aparecem aqui assim que o número da Uazapi
+                    estiver conectado.
                   </p>
                 )}
-                {selectedTimeline.map((entry, i) =>
-                  entry.kind === "note" ? (
-                    <div key={i} className="flex justify-end">
-                      <div className="max-w-[75%] bg-primary text-primary-foreground rounded-2xl rounded-br-sm px-3 py-2">
-                        <p className="text-sm whitespace-pre-wrap">{entry.text}</p>
-                        <p className="text-[10px] opacity-80 mt-1">
-                          {new Date(entry.at).toLocaleString("pt-BR", {
-                            day: "2-digit",
-                            month: "2-digit",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  ) : (
-                    <div key={i} className="flex justify-center">
-                      <div
-                        className={cn(
-                          "text-xs px-3 py-1 rounded-full inline-flex items-center gap-1.5",
-                          entry.answered
-                            ? "bg-success/15 text-[#16A34A]"
-                            : "bg-destructive/15 text-destructive",
-                        )}
-                      >
-                        <Phone className="h-3 w-3" />
-                        {entry.answered ? "Ligação atendida" : "Ligação não atendida"} ·{" "}
-                        {new Date(entry.at).toLocaleString("pt-BR", {
-                          day: "2-digit",
-                          month: "2-digit",
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        })}
-                      </div>
-                    </div>
-                  ),
-                )}
+                {messages.map((m) => (
+                  <MessageBubble key={m.id} message={m} />
+                ))}
               </div>
 
               <div className="flex items-center gap-2 p-3 border-t border-border shrink-0">
                 <Input
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
-                  placeholder="Digite uma nota ou mensagem..."
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), sendMessage())}
+                  placeholder="Escreva uma mensagem..."
+                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSend())}
                   className="flex-1"
                 />
                 <Button
-                  variant="outline"
                   size="icon"
-                  onClick={saveNoteOnly}
-                  title="Salvar só como nota interna (não envia WhatsApp)"
-                  disabled={!draft.trim()}
-                >
-                  <StickyNote className="h-4 w-4" />
-                </Button>
-                <Button
-                  size="icon"
-                  onClick={sendMessage}
-                  disabled={!draft.trim()}
-                  title="Salvar nota e enviar no WhatsApp"
+                  onClick={handleSend}
+                  disabled={!draft.trim() || sendMessage.isPending}
                 >
                   <Send className="h-4 w-4" />
                 </Button>
@@ -290,6 +205,16 @@ function ChatPage() {
             </>
           )}
         </div>
+
+        {/* Coluna 2: painel do lead — só aparece em telas xl+ pra não competir
+            por espaço com a thread em telas menores (mesma lógica responsiva
+            do resto do app, que já esconde a lista quando uma conversa está
+            aberta em mobile). */}
+        {selected && (
+          <div className="hidden xl:flex xl:order-2 border-r border-border flex-col min-h-0">
+            <LeadPanel lead={selected} />
+          </div>
+        )}
       </div>
     </div>
   );
