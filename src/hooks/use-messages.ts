@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
+import type { Lead } from "@/routes/_authenticated/crm";
 
 export type Message = Tables<"automation_messages">;
 
@@ -24,35 +25,42 @@ export function useMessages(leadId: string | null) {
   });
 }
 
+const N8N_SEND_WEBHOOK_URL =
+  import.meta.env.VITE_N8N_SEND_WEBHOOK_URL ||
+  "https://n8n.vendacomprocesso.com/webhook/redeoto-outbound-send";
+
 /**
- * Grava uma mensagem de saída manual (equipe respondendo pelo próprio sistema).
- * Isto NÃO envia pelo WhatsApp de verdade ainda — o envio real via Uazapi é
- * feito pelo workflow do n8n. Por enquanto isto só registra a mensagem na
- * thread e abre o wa.me como fallback manual, igual o chat.tsx antigo fazia
- * pra notas. Trocar por chamada direta ao n8n (webhook de saída) é o próximo
- * passo, quando o envio de mensagens estiver automatizado.
+ * Envia mensagem de texto de verdade pelo WhatsApp: chama o webhook do n8n
+ * (workflow "Redeoto -> Uazapi (Envio)"), que manda via Uazapi e grava o
+ * resultado em automation_messages com o wa_message_id real. O n8n é quem
+ * grava no banco (não o front) para o registro só existir se o envio de
+ * fato aconteceu — evita mensagem "fantasma" marcada como enviada sem ter
+ * saído de verdade.
  */
-export function useSendMessage(leadId: string | null) {
+export function useSendMessage(lead: Lead | null) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (body: string) => {
-      if (!leadId) throw new Error("Nenhum lead selecionado");
+    mutationFn: async (text: string) => {
+      if (!lead) throw new Error("Nenhum lead selecionado");
+      if (!lead.phone_e164) throw new Error("Lead sem telefone válido para WhatsApp");
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      const { error } = await supabase.from("automation_messages").insert({
-        lead_id: leadId,
-        direction: "outbound",
-        message_type: "text",
-        body,
-        sender_name: user?.email ?? "Equipe",
-        is_from_bot: false,
-        status: "sent",
+
+      const res = await fetch(N8N_SEND_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          phone_e164: lead.phone_e164,
+          text,
+          sender_name: user?.email ?? "Equipe",
+        }),
       });
-      if (error) throw error;
+      if (!res.ok) throw new Error("Falha ao enviar mensagem pelo WhatsApp");
     },
     onSuccess: () => {
-      if (leadId) qc.invalidateQueries({ queryKey: messagesQueryKey(leadId) });
+      if (lead) qc.invalidateQueries({ queryKey: messagesQueryKey(lead.id) });
     },
   });
 }

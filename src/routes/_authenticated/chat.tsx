@@ -9,6 +9,7 @@ import { useLeads } from "@/hooks/use-leads";
 import { useMessages, useSendMessage } from "@/hooks/use-messages";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { LeadPanel } from "@/components/chat/lead-panel";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
@@ -55,7 +56,7 @@ function ChatPage() {
   const { data: leads = [] } = useLeads();
   const selected = leads.find((l) => l.id === selectedId) ?? null;
   const { data: messages = [] } = useMessages(selectedId);
-  const sendMessage = useSendMessage(selectedId);
+  const sendMessage = useSendMessage(selected);
 
   const sorted = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -78,7 +79,12 @@ function ChatPage() {
     const text = draft.trim();
     if (!text || !selected) return;
     setDraft("");
-    await sendMessage.mutateAsync(text);
+    try {
+      await sendMessage.mutateAsync(text);
+    } catch (err) {
+      setDraft(text);
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar mensagem");
+    }
   }
 
   return (
