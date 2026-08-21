@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Phone, Pencil, MapPin, Wallet, CalendarClock, Tag } from "lucide-react";
+import { Phone, Pencil, CheckCircle2, Circle } from "lucide-react";
 import { formatBRL } from "@/lib/date-ranges";
 import { LeadModal, waLink } from "@/components/lead-modal";
 import type { Lead } from "@/routes/_authenticated/crm";
@@ -10,37 +10,59 @@ import { COLUMNS } from "@/routes/_authenticated/crm";
 import { useQueryClient } from "@tanstack/react-query";
 import { LEADS_QUERY_KEY } from "@/hooks/use-leads";
 
+// Mesma lista/labels do checklist em lead-modal.tsx — mantida em sincronia
+// manual de propósito (é só leitura aqui, quem edita é o modal).
+const CHECKLIST = [
+  { key: "primeiro_contato", label: "Primeiro contato feito" },
+  { key: "agendamento_oferecido", label: "Agendamento oferecido" },
+  { key: "avaliacao_realizada", label: "Avaliação realizada" },
+  { key: "orcamento_apresentado", label: "Orçamento apresentado" },
+  { key: "followup_24h", label: "Follow-up 24h" },
+  { key: "followup_3d", label: "Follow-up 3 dias" },
+  { key: "followup_7d", label: "Follow-up 7 dias" },
+  { key: "followup_14d", label: "Follow-up 14 dias" },
+];
+
 function stageLabel(stage: string) {
   return COLUMNS.find((c) => c.id === stage)?.title ?? stage;
 }
 
-function Field({
-  icon: Icon,
-  label,
-  value,
-}: {
-  icon: React.ComponentType<{ className?: string }>;
-  label: string;
-  value: React.ReactNode;
-}) {
-  if (!value) return null;
+function fmtDateTime(iso: string | null) {
+  if (!iso) return null;
+  return new Date(iso).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-start gap-2.5 text-sm">
-      <Icon className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-      <div className="min-w-0">
-        <p className="text-[11px] text-muted-foreground">{label}</p>
-        <p className="truncate">{value}</p>
-      </div>
+    <div className="space-y-2">
+      <h3 className="text-xs font-semibold text-foreground">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: React.ReactNode }) {
+  return (
+    <div className="text-sm">
+      <p className="text-[11px] text-muted-foreground">{label}</p>
+      <p>{value || "—"}</p>
     </div>
   );
 }
 
 /**
  * Painel do lead (coluna do meio no layout de 3 colunas). Referência visual:
- * layout de conversas do Kommo que o Vitor usa com clientes automotivos —
- * aqui os campos são os do Redeoto (clínica), não os do Kommo (Marketing/SDR/
- * Veículo não existem aqui). A edição de verdade reaproveita o LeadModal que
- * já existe no CRM, em vez de duplicar o formulário.
+ * layout de conversas do Kommo que o Vitor usa com clientes automotivos.
+ * Ajustado depois do print de feedback: em vez de mostrar só um resumo,
+ * espelha as mesmas seções do formulário de edição (Contato / Comercial /
+ * Etapa e agendamento / Checklist) — assim dá pra ver tudo sem abrir o
+ * modal. A edição em si continua reaproveitando o LeadModal existente.
  */
 export function LeadPanel({ lead }: { lead: Lead }) {
   const [editing, setEditing] = useState(false);
@@ -70,7 +92,7 @@ export function LeadPanel({ lead }: { lead: Lead }) {
           </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="principal" className="flex-1 overflow-y-auto p-3 space-y-4 mt-0">
+        <TabsContent value="principal" className="flex-1 overflow-y-auto p-3 space-y-5 mt-0">
           {lead.phone_e164 && (
             <a
               href={waLink(lead.phone_e164)}
@@ -83,39 +105,56 @@ export function LeadPanel({ lead }: { lead: Lead }) {
             </a>
           )}
 
-          <div className="space-y-3">
-            <Field
-              icon={Tag}
-              label="Serviço / Origem"
-              value={`${lead.service || "—"} · ${lead.origin || "—"}`}
-            />
-            <Field
-              icon={Wallet}
-              label="Orçamento"
-              value={lead.budget_amount ? formatBRL(lead.budget_amount) : null}
-            />
-            <Field
-              icon={CalendarClock}
-              label="Agendamento"
-              value={
-                lead.appointment_date
-                  ? new Date(lead.appointment_date).toLocaleString("pt-BR", {
-                      day: "2-digit",
-                      month: "2-digit",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })
-                  : null
-              }
-            />
-            <Field icon={MapPin} label="Financiamento" value={lead.financing} />
-          </div>
+          <Section title="Contato">
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Telefone" value={lead.phone} />
+              <Row label="Mídia (de onde veio)" value={lead.media} />
+              <Row label="Origem (como chegou)" value={lead.origin} />
+            </div>
+          </Section>
+
+          <Section title="Comercial">
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Serviço de interesse" value={lead.service} />
+              <Row
+                label="Valor do orçamento"
+                value={lead.budget_amount ? formatBRL(lead.budget_amount) : null}
+              />
+              <Row label="Financiamento?" value={lead.financing} />
+              <Row label="Urgente" value={lead.urgent ? "Sim" : "Não"} />
+            </div>
+          </Section>
+
+          <Section title="Etapa e agendamento">
+            <div className="grid grid-cols-2 gap-3">
+              <Row label="Etapa" value={stageLabel(lead.stage)} />
+              <Row label="Data de criação do lead" value={fmtDateTime(lead.entry_date)} />
+              <Row label="Data do agendamento" value={fmtDateTime(lead.appointment_date)} />
+            </div>
+          </Section>
+
+          <Section title="Checklist de etapas">
+            <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">
+              {CHECKLIST.map((c) => {
+                const done = !!lead.checklist?.[c.key];
+                return (
+                  <div key={c.key} className="flex items-center gap-1.5 text-xs">
+                    {done ? (
+                      <CheckCircle2 className="h-3.5 w-3.5 text-[#16A34A] shrink-0" />
+                    ) : (
+                      <Circle className="h-3.5 w-3.5 text-muted-foreground/40 shrink-0" />
+                    )}
+                    <span className={done ? "" : "text-muted-foreground"}>{c.label}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
 
           {lead.notes && (
-            <div>
-              <p className="text-[11px] text-muted-foreground mb-1">Notas</p>
+            <Section title="Observações">
               <p className="text-sm whitespace-pre-wrap">{lead.notes}</p>
-            </div>
+            </Section>
           )}
         </TabsContent>
 
