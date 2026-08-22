@@ -83,7 +83,7 @@ export function waLink(phoneE164: string, text?: string) {
 
 const STAGES = [
   { id: "novo", label: "Novo Lead" },
-  { id: "contato", label: "Contato Feito" },
+  { id: "contato", label: "Em Atendimento" },
   { id: "agendado", label: "Agendado" },
   { id: "orcamento", label: "Em Orçamento" },
   { id: "followup", label: "Follow-up Ativo" },

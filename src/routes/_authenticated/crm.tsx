@@ -73,7 +73,7 @@ export interface Lead {
 
 export const COLUMNS = [
   { id: "novo", title: "Novo Lead" },
-  { id: "contato", title: "Contato Feito" },
+  { id: "contato", title: "Em Atendimento" },
   { id: "agendado", title: "Agendado" },
   { id: "orcamento", title: "Em Orçamento" },
   { id: "followup", title: "Follow-up Ativo" },
