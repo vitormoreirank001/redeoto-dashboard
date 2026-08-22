@@ -75,6 +75,7 @@ export const COLUMNS = [
   { id: "novo", title: "Novo Lead" },
   { id: "contato", title: "Em Atendimento" },
   { id: "agendado", title: "Agendado" },
+  { id: "nao_compareceu", title: "Não compareceu" },
   { id: "orcamento", title: "Em Orçamento" },
   { id: "followup", title: "Follow-up Ativo" },
   { id: "fechado", title: "Fechado" },

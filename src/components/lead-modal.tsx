@@ -85,6 +85,7 @@ const STAGES = [
   { id: "novo", label: "Novo Lead" },
   { id: "contato", label: "Em Atendimento" },
   { id: "agendado", label: "Agendado" },
+  { id: "nao_compareceu", label: "Não compareceu" },
   { id: "orcamento", label: "Em Orçamento" },
   { id: "followup", label: "Follow-up Ativo" },
   { id: "fechado", label: "Fechado" },
