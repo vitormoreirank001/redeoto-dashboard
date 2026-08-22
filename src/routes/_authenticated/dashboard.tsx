@@ -24,15 +24,25 @@ import {
   todayISO,
   weekStartISO,
   yesterdayISO,
+  type Period,
+  PERIOD_LABEL,
+  periodRange,
 } from "@/lib/date-ranges";
 import { Progress } from "@/components/ui/progress";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 import { COLUMNS } from "./crm";
 import type { Lead } from "./crm";
 import { CalendarPlus, MessageCircle } from "lucide-react";
-import { defaultReminderMessage, waLink } from "@/components/lead-modal";
 import { useLeads } from "@/hooks/use-leads";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
@@ -111,6 +121,9 @@ function buildActionItem(lead: Lead): ActionItem | null {
 
 function DashboardPage() {
   const [userName, setUserName] = useState("");
+  const [revenuePeriod, setRevenuePeriod] = useState<Period>("month");
+  const [revenueFrom, setRevenueFrom] = useState("");
+  const [revenueTo, setRevenueTo] = useState("");
   useEffect(() => {
     supabase.auth.getUser().then(async ({ data }) => {
       if (!data.user) return;
@@ -176,27 +189,38 @@ function DashboardPage() {
   const quoteByDate = leads
     .filter((l) => (l.checklist as Record<string, boolean>)?.orcamento_apresentado)
     .map((l) => ({ date: entryDay(l) }));
-  const salesByDate = leads
-    .filter((l) => l.stage === "fechado")
-    .map((l) => ({ date: saleDay(l) }));
+  const salesByDate = leads.filter((l) => l.stage === "fechado").map((l) => ({ date: saleDay(l) }));
 
   const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
 
   const allCalls = leads.flatMap((l) => l.calls ?? []);
   const callDay = (c: { at: string }) => c.at.slice(0, 10);
   const sumCalls = (kind: "made" | "answered", s: string, e: string) =>
-    allCalls.filter(
-      (c) => callDay(c) >= s && callDay(c) <= e && (kind === "made" || c.answered),
-    ).length;
+    allCalls.filter((c) => callDay(c) >= s && callDay(c) <= e && (kind === "made" || c.answered))
+      .length;
 
-  // Faturamento do mês = vendas FECHADAS no mês (saleDay), não leads que entraram no mês.
-  const revenueMonth = leads
-    .filter((l) => l.stage === "fechado" && saleDay(l) >= ms && saleDay(l) <= me)
+  // Faturamento = vendas FECHADAS dentro do período escolhido (saleDay, não
+  // entry_date — o lead pode ter entrado num mês e fechado só no seguinte).
+  // Meta continua sendo sempre a do mês corrente (monthly_goals não tem
+  // conceito de período livre) — comparar um período parcial contra ela é
+  // informação válida (ex: "quanto já bati da meta do mês só hoje").
+  const revenueRange =
+    revenuePeriod === "custom"
+      ? { from: revenueFrom || null, to: revenueTo || null }
+      : periodRange(revenuePeriod);
+  const revenueFiltered = leads
+    .filter((l) => {
+      if (l.stage !== "fechado") return false;
+      const day = saleDay(l);
+      if (revenueRange.from && day < revenueRange.from) return false;
+      if (revenueRange.to && day > revenueRange.to) return false;
+      return true;
+    })
     .reduce((a, l) => a + Number(l.budget_amount || 0), 0);
 
   const goal = goalData?.target_amount ?? 0;
-  const pct = goal > 0 ? Math.min(100, Math.round((revenueMonth / goal) * 100)) : 0;
-  const missing = Math.max(0, goal - revenueMonth);
+  const pct = goal > 0 ? Math.min(100, Math.round((revenueFiltered / goal) * 100)) : 0;
+  const missing = Math.max(0, goal - revenueFiltered);
 
   const ans = sumCalls("answered", ms, me);
   const made = sumCalls("made", ms, me);
@@ -237,17 +261,55 @@ function DashboardPage() {
           <div className="relative">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
-                <p className="text-sm text-muted-foreground">Faturamento do mês</p>
+                <p className="text-sm text-muted-foreground">
+                  Faturamento —{" "}
+                  {PERIOD_LABEL[revenuePeriod as Exclude<Period, "custom">] ?? "Personalizado"}
+                </p>
                 <p className="text-4xl font-extrabold text-primary mt-1">
-                  {formatBRL(revenueMonth)}
+                  {formatBRL(revenueFiltered)}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Meta: <span className="text-foreground">{formatBRL(goal)}</span>
+                  Meta do mês: <span className="text-foreground">{formatBRL(goal)}</span>
                 </p>
               </div>
-              <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center">
+              <div className="h-12 w-12 rounded-xl bg-primary/15 text-primary flex items-center justify-center shrink-0">
                 <TrendingUp className="h-6 w-6" />
               </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <Select value={revenuePeriod} onValueChange={(v) => setRevenuePeriod(v as Period)}>
+                <SelectTrigger className="h-8 w-auto min-w-[140px] text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(Object.keys(PERIOD_LABEL) as Array<keyof typeof PERIOD_LABEL>).map((p) => (
+                    <SelectItem key={p} value={p}>
+                      {PERIOD_LABEL[p]}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="custom">Personalizado…</SelectItem>
+                </SelectContent>
+              </Select>
+              {revenuePeriod === "custom" && (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    type="date"
+                    value={revenueFrom}
+                    onChange={(e) => setRevenueFrom(e.target.value)}
+                    className="h-8 w-auto text-xs"
+                    aria-label="Data inicial"
+                  />
+                  <span className="text-xs text-muted-foreground">até</span>
+                  <Input
+                    type="date"
+                    value={revenueTo}
+                    onChange={(e) => setRevenueTo(e.target.value)}
+                    className="h-8 w-auto text-xs"
+                    aria-label="Data final"
+                  />
+                </div>
+              )}
             </div>
             <div className="mt-4">
               <div className="flex justify-between text-xs text-muted-foreground mb-2">
@@ -364,13 +426,10 @@ function DashboardPage() {
                   : kind === "no_appointment"
                     ? "text-[#D97706]"
                     : "text-[#16A34A]";
-              const waHref = lead.phone_e164
-                ? kind === "reminder_upcoming" && lead.appointment_date
-                  ? waLink(lead.phone_e164, defaultReminderMessage(lead.name, lead.appointment_date))
-                  : kind === "overdue"
-                    ? waLink(lead.phone_e164)
-                    : null
-                : null;
+              // Leva pro chat do próprio sistema (não pro wa.me) — tanto pra
+              // cobrar o atraso quanto pra confirmar o agendamento.
+              const showChatButton =
+                !!lead.phone_e164 && (kind === "reminder_upcoming" || kind === "overdue");
               return (
                 <Link
                   key={lead.id}
@@ -394,17 +453,16 @@ function DashboardPage() {
                       {detail}
                     </p>
                   </div>
-                  {waHref && (
-                    <a
-                      href={waHref}
-                      target="_blank"
-                      rel="noreferrer"
+                  {showChatButton && (
+                    <Link
+                      to="/chat"
+                      search={{ lead: lead.id }}
                       onClick={(e) => e.stopPropagation()}
                       className="shrink-0 h-8 w-8 rounded-lg bg-success/15 text-[#16A34A] flex items-center justify-center hover:bg-success/25 transition-colors"
-                      title="Chamar no WhatsApp"
+                      title="Abrir conversa"
                     >
                       <MessageCircle className="h-4 w-4" />
-                    </a>
+                    </Link>
                   )}
                 </Link>
               );

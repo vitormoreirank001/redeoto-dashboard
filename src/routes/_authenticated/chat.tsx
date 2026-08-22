@@ -13,6 +13,9 @@ import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/chat")({
   component: ChatPage,
+  validateSearch: (search: Record<string, unknown>): { lead?: string } => ({
+    lead: typeof search.lead === "string" ? search.lead : undefined,
+  }),
 });
 
 /**
@@ -48,12 +51,19 @@ function initials(name: string): string {
 }
 
 function ChatPage() {
+  const { lead: deepLinkedLeadId } = Route.useSearch();
   const [search, setSearch] = useState("");
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(deepLinkedLeadId ?? null);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const { data: leads = [] } = useLeads();
+
+  // Abrir direto numa conversa a partir de outra tela (ex: botão "chamar" no
+  // Dashboard) — troca de lead se o link mudar enquanto a página já está aberta.
+  useEffect(() => {
+    if (deepLinkedLeadId) setSelectedId(deepLinkedLeadId);
+  }, [deepLinkedLeadId]);
   const selected = leads.find((l) => l.id === selectedId) ?? null;
   const { data: messages = [] } = useMessages(selectedId);
   const sendMessage = useSendMessage(selected);

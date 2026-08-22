@@ -104,6 +104,7 @@ export type Database = {
         Row: {
           created_at: string;
           field_type: string;
+          group_name: string;
           id: string;
           key: string;
           label: string;
@@ -113,6 +114,7 @@ export type Database = {
         Insert: {
           created_at?: string;
           field_type?: string;
+          group_name?: string;
           id?: string;
           key: string;
           label: string;
@@ -122,6 +124,7 @@ export type Database = {
         Update: {
           created_at?: string;
           field_type?: string;
+          group_name?: string;
           id?: string;
           key?: string;
           label?: string;

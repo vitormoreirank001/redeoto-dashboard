@@ -19,11 +19,23 @@ import { toast } from "sonner";
 import { Trash2, CalendarPlus, MessageCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 
-interface CustomField {
+export interface CustomField {
   key: string;
   label: string;
   field_type: "text" | "number" | "boolean" | "select";
   options: string[];
+  group_name: string;
+}
+
+/** Agrupa campos personalizados por group_name, preservando a ordem de sort_order. */
+export function groupCustomFields(fields: CustomField[]): Array<[string, CustomField[]]> {
+  const groups = new Map<string, CustomField[]>();
+  for (const f of fields) {
+    const list = groups.get(f.group_name) ?? [];
+    list.push(f);
+    groups.set(f.group_name, list);
+  }
+  return Array.from(groups.entries());
 }
 
 function toDatetimeLocal(iso: string | null | undefined) {
@@ -64,7 +76,9 @@ export function defaultReminderMessage(name: string, appointmentDate: string) {
 
 export function waLink(phoneE164: string, text?: string) {
   const digits = phoneE164.replace("+", "");
-  return text ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}` : `https://wa.me/${digits}`;
+  return text
+    ? `https://wa.me/${digits}?text=${encodeURIComponent(text)}`
+    : `https://wa.me/${digits}`;
 }
 
 const STAGES = [
@@ -164,7 +178,8 @@ export function LeadModal({
     queryFn: async () => {
       const { data } = await supabase
         .from("custom_fields")
-        .select("key,label,field_type,options")
+        .select("key,label,field_type,options,group_name")
+        .order("group_name")
         .order("sort_order");
       return (data ?? []) as CustomField[];
     },
@@ -294,24 +309,27 @@ export function LeadModal({
           </DialogTitle>
         </DialogHeader>
 
-        {!isNew && !form.appointment_date && form.stage !== "fechado" && form.stage !== "perdido" && (
-          <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#D97706]">
-              <CalendarPlus className="h-4 w-4" /> Sem agendamento marcado
+        {!isNew &&
+          !form.appointment_date &&
+          form.stage !== "fechado" &&
+          form.stage !== "perdido" && (
+            <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
+              <div className="flex items-center gap-2 text-sm font-medium text-[#D97706]">
+                <CalendarPlus className="h-4 w-4" /> Sem agendamento marcado
+              </div>
+              <div className="flex flex-wrap items-end gap-2 mt-2">
+                <Input
+                  type="datetime-local"
+                  value={quickApptAt}
+                  onChange={(e) => setQuickApptAt(e.target.value)}
+                  className="w-auto"
+                />
+                <Button type="button" size="sm" onClick={markScheduled}>
+                  Marcar agendamento
+                </Button>
+              </div>
             </div>
-            <div className="flex flex-wrap items-end gap-2 mt-2">
-              <Input
-                type="datetime-local"
-                value={quickApptAt}
-                onChange={(e) => setQuickApptAt(e.target.value)}
-                className="w-auto"
-              />
-              <Button type="button" size="sm" onClick={markScheduled}>
-                Marcar agendamento
-              </Button>
-            </div>
-          </div>
-        )}
+          )}
 
         {!isNew && form.appointment_date && (
           <div className="rounded-lg border border-success/40 bg-success/5 p-3">
@@ -537,11 +555,11 @@ export function LeadModal({
           </div>
         </div>
 
-        {customFields.length > 0 && (
-          <div className="mt-6">
-            <h4 className="text-sm font-semibold mb-3">Campos personalizados</h4>
+        {groupCustomFields(customFields).map(([groupName, fields]) => (
+          <div key={groupName} className="mt-6">
+            <h4 className="text-sm font-semibold mb-3">{groupName}</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {customFields.map((cf) => (
+              {fields.map((cf) => (
                 <Field key={cf.key} label={cf.label}>
                   {cf.field_type === "boolean" ? (
                     <div className="flex items-center gap-2 pt-1">
@@ -586,7 +604,7 @@ export function LeadModal({
               ))}
             </div>
           </div>
-        )}
+        ))}
 
         <div className="mt-6">
           <h4 className="text-sm font-semibold mb-3">Checklist de etapas</h4>

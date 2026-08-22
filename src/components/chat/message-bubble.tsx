@@ -1,5 +1,5 @@
 import { cn } from "@/lib/utils";
-import { FileText, ImageOff, MapPin } from "lucide-react";
+import { Check, CheckCheck, Clock, FileText, ImageOff, MapPin } from "lucide-react";
 import type { Message } from "@/hooks/use-messages";
 
 /**
@@ -33,6 +33,28 @@ function formatTime(iso: string) {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+/**
+ * Tique de status estilo WhatsApp — só faz sentido pra mensagem ENVIADA
+ * (o lead não "recebe confirmação de leitura" da mensagem que ele mesmo
+ * mandou). Vem de automation_messages.status, atualizado pelo workflow de
+ * recebimento do n8n a cada evento `messages_update` da Uazapi.
+ */
+function StatusTicks({ status }: { status: Message["status"] }) {
+  if (status === "failed") {
+    return <span title="Falha no envio">⚠️</span>;
+  }
+  if (status === "read") {
+    return <CheckCheck className="h-3.5 w-3.5 text-sky-300" aria-label="Lida" />;
+  }
+  if (status === "delivered") {
+    return <CheckCheck className="h-3.5 w-3.5" aria-label="Entregue" />;
+  }
+  if (status === "sent") {
+    return <Check className="h-3.5 w-3.5" aria-label="Enviada, ainda não entregue" />;
+  }
+  return <Clock className="h-3 w-3" aria-label="Enviando" />;
 }
 
 function MediaPending({ label }: { label: string }) {
@@ -119,6 +141,7 @@ export function MessageBubble({ message }: { message: Message }) {
             <span>{message.sender_name}</span>
           )}
           <span>{formatTime(message.created_at)}</span>
+          {isOutbound && <StatusTicks status={message.status} />}
         </div>
       </div>
     </div>

@@ -27,7 +27,6 @@ import {
   MessageCircle,
   Copy,
   ShieldAlert,
-  BellRing,
 } from "lucide-react";
 import {
   Table,
@@ -93,27 +92,12 @@ function SettingsContent() {
     queryFn: async () => {
       const { data } = await supabase
         .from("app_settings")
-        .select("logo_url,whatsapp_webhook_token,whatsapp_connected_at,notify_overdue_leads")
+        .select("logo_url,whatsapp_webhook_token,whatsapp_connected_at")
         .eq("id", true)
         .maybeSingle();
       return data;
     },
   });
-
-  // ---- Notificação de leads atrasados ----
-  async function toggleOverdueNotifications(checked: boolean) {
-    if (checked && typeof Notification !== "undefined" && Notification.permission === "default") {
-      await Notification.requestPermission();
-    }
-    const { error } = await supabase
-      .from("app_settings")
-      .update({ notify_overdue_leads: checked })
-      .eq("id", true);
-    if (error) return toast.error(error.message);
-    toast.success(checked ? "Notificação de leads atrasados ativada" : "Notificação desativada");
-    qc.invalidateQueries({ queryKey: ["app_settings"] });
-    qc.invalidateQueries({ queryKey: ["app_settings_notify"] });
-  }
 
   async function uploadLogo(file: File) {
     setUploading(true);
@@ -237,13 +221,22 @@ function SettingsContent() {
   const [cfLabel, setCfLabel] = useState("");
   const [cfType, setCfType] = useState("text");
   const [cfOptions, setCfOptions] = useState("");
+  const [cfGroup, setCfGroup] = useState("");
   const customFieldsQ = useQuery({
     queryKey: ["custom_fields"],
     queryFn: async () => {
-      const { data } = await supabase.from("custom_fields").select("*").order("sort_order");
+      const { data } = await supabase
+        .from("custom_fields")
+        .select("*")
+        .order("group_name")
+        .order("sort_order");
       return data ?? [];
     },
   });
+
+  const existingGroups = Array.from(
+    new Set((customFieldsQ.data ?? []).map((f) => f.group_name).filter(Boolean)),
+  ).sort();
 
   async function addCustomField() {
     if (!cfLabel.trim()) return toast.error("Nome do campo obrigatório");
@@ -267,12 +260,14 @@ function SettingsContent() {
       label: cfLabel.trim(),
       field_type: cfType,
       options,
+      group_name: cfGroup.trim() || "Outros",
       sort_order: count,
     });
     if (error) return toast.error(error.message);
     setCfLabel("");
     setCfOptions("");
     setCfType("text");
+    setCfGroup("");
     qc.invalidateQueries({ queryKey: ["custom_fields"] });
   }
   async function removeCustomField(id: string) {
@@ -394,22 +389,6 @@ function SettingsContent() {
         </div>
       </Section>
 
-      <Section title="Notificações" icon={<BellRing className="h-4 w-4 text-primary" />}>
-        <div className="flex items-center justify-between max-w-sm">
-          <div>
-            <p className="text-sm font-medium">Avisar sobre leads atrasados</p>
-            <p className="text-xs text-muted-foreground">
-              Toast na tela + notificação do navegador (aba em segundo plano) quando um lead fica
-              sem contato dentro do prazo. Vale para toda a equipe.
-            </p>
-          </div>
-          <Switch
-            checked={settingsQ.data?.notify_overdue_leads ?? true}
-            onCheckedChange={toggleOverdueNotifications}
-          />
-        </div>
-      </Section>
-
       <Section title="Meta de Faturamento">
         <div className="flex items-end gap-3 flex-wrap">
           <div className="flex-1 min-w-[200px]">
@@ -483,9 +462,10 @@ function SettingsContent() {
         icon={<SlidersHorizontal className="h-4 w-4 text-primary" />}
       >
         <p className="text-xs text-muted-foreground mb-3">
-          Campos extras exibidos no card do lead. Crie quantos precisar.
+          Campos extras exibidos no card do lead, agrupados por assunto (ex: "Convênio", "Histórico
+          médico") — evita virar uma lista única sem organização.
         </p>
-        <div className="grid grid-cols-1 md:grid-cols-[1fr_140px_1fr_auto] gap-3 mb-4">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_130px_1fr_150px_auto] gap-3 mb-4">
           <Input
             placeholder="Nome do campo (ex: Plano de saúde)"
             value={cfLabel}
@@ -508,42 +488,58 @@ function SettingsContent() {
             onChange={(e) => setCfOptions(e.target.value)}
             disabled={cfType !== "select"}
           />
+          <Input
+            placeholder="Grupo (ex: Convênio)"
+            value={cfGroup}
+            onChange={(e) => setCfGroup(e.target.value)}
+            list="cf-existing-groups"
+          />
+          <datalist id="cf-existing-groups">
+            {existingGroups.map((g) => (
+              <option key={g} value={g} />
+            ))}
+          </datalist>
           <Button onClick={addCustomField}>
             <Plus className="h-4 w-4 mr-2" /> Adicionar
           </Button>
         </div>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Campo</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead className="w-12"></TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(customFieldsQ.data ?? []).map((f: any) => (
-              <TableRow key={f.id}>
-                <TableCell className="font-medium">{f.label}</TableCell>
-                <TableCell className="text-muted-foreground capitalize">{f.field_type}</TableCell>
-                <TableCell>
-                  <button
-                    onClick={() => removeCustomField(f.id)}
-                    className="text-muted-foreground hover:text-destructive transition-colors"
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </button>
-                </TableCell>
-              </TableRow>
+        {!customFieldsQ.data?.length ? (
+          <p className="text-center text-muted-foreground py-6 text-sm">
+            Nenhum campo personalizado.
+          </p>
+        ) : (
+          <div className="space-y-4">
+            {existingGroups.map((group) => (
+              <div key={group}>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">
+                  {group}
+                </p>
+                <Table>
+                  <TableBody>
+                    {(customFieldsQ.data ?? [])
+                      .filter((f) => f.group_name === group)
+                      .map((f) => (
+                        <TableRow key={f.id}>
+                          <TableCell className="font-medium">{f.label}</TableCell>
+                          <TableCell className="text-muted-foreground capitalize">
+                            {f.field_type}
+                          </TableCell>
+                          <TableCell className="w-12">
+                            <button
+                              onClick={() => removeCustomField(f.id)}
+                              className="text-muted-foreground hover:text-destructive transition-colors"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              </div>
             ))}
-            {!customFieldsQ.data?.length && (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
-                  Nenhum campo personalizado.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
+          </div>
+        )}
       </Section>
 
       <Section title="Usuários">

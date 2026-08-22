@@ -79,3 +79,53 @@ export function greeting(): string {
   if (h < 18) return "Boa tarde";
   return "Boa noite";
 }
+
+/** Qual data o filtro de período considera (usado onde há venda x entrada). */
+export type DateBasis = "entry" | "sale";
+
+export type Period = "all" | "today" | "7d" | "30d" | "month" | "lastmonth" | "custom";
+
+export const PERIOD_LABEL: Record<Exclude<Period, "custom">, string> = {
+  all: "Todo o período",
+  today: "Hoje",
+  "7d": "Últimos 7 dias",
+  "30d": "Últimos 30 dias",
+  month: "Este mês",
+  lastmonth: "Mês passado",
+};
+
+/**
+ * Faixa [from, to] inclusiva em YYYY-MM-DD pro período pré-definido escolhido.
+ * `null` num dos lados = sem limite daquele lado. Extraído do CRM pra reusar
+ * o mesmo filtro no Dashboard (§3 do backlog v4.1.1).
+ */
+export function periodRange(p: Period): { from: string | null; to: string | null } {
+  const now = new Date();
+  const today = toLocalISO(now);
+  switch (p) {
+    case "today":
+      return { from: today, to: today };
+    case "7d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 6);
+      return { from: toLocalISO(d), to: today };
+    }
+    case "30d": {
+      const d = new Date(now);
+      d.setDate(d.getDate() - 29);
+      return { from: toLocalISO(d), to: today };
+    }
+    case "month":
+      return {
+        from: toLocalISO(new Date(now.getFullYear(), now.getMonth(), 1)),
+        to: toLocalISO(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
+      };
+    case "lastmonth":
+      return {
+        from: toLocalISO(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
+        to: toLocalISO(new Date(now.getFullYear(), now.getMonth(), 0)),
+      };
+    default:
+      return { from: null, to: null };
+  }
+}

@@ -4,11 +4,12 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Phone, Pencil, CheckCircle2, Circle } from "lucide-react";
 import { formatBRL } from "@/lib/date-ranges";
-import { LeadModal, waLink } from "@/components/lead-modal";
+import { LeadModal, waLink, groupCustomFields, type CustomField } from "@/components/lead-modal";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { COLUMNS } from "@/routes/_authenticated/crm";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { LEADS_QUERY_KEY } from "@/hooks/use-leads";
+import { supabase } from "@/integrations/supabase/client";
 
 // Mesma lista/labels do checklist em lead-modal.tsx — mantida em sincronia
 // manual de propósito (é só leitura aqui, quem edita é o modal).
@@ -64,9 +65,29 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
  * Etapa e agendamento / Checklist) — assim dá pra ver tudo sem abrir o
  * modal. A edição em si continua reaproveitando o LeadModal existente.
  */
+function customFieldValueLabel(cf: CustomField, raw: unknown): string | null {
+  if (raw === null || raw === undefined || raw === "") return null;
+  if (cf.field_type === "boolean") return raw ? "Sim" : "Não";
+  return String(raw);
+}
+
 export function LeadPanel({ lead }: { lead: Lead }) {
   const [editing, setEditing] = useState(false);
   const qc = useQueryClient();
+
+  // Mesma queryKey do LeadModal — cache compartilhado, sem requisição extra
+  // se o modal já buscou os campos personalizados antes.
+  const { data: customFields = [] } = useQuery({
+    queryKey: ["custom_fields"],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("custom_fields")
+        .select("key,label,field_type,options,group_name")
+        .order("group_name")
+        .order("sort_order");
+      return (data ?? []) as CustomField[];
+    },
+  });
 
   return (
     <div className="flex flex-col h-full">
@@ -132,6 +153,20 @@ export function LeadPanel({ lead }: { lead: Lead }) {
               <Row label="Data do agendamento" value={fmtDateTime(lead.appointment_date)} />
             </div>
           </Section>
+
+          {groupCustomFields(customFields).map(([groupName, fields]) => (
+            <Section key={groupName} title={groupName}>
+              <div className="grid grid-cols-2 gap-3">
+                {fields.map((cf) => (
+                  <Row
+                    key={cf.key}
+                    label={cf.label}
+                    value={customFieldValueLabel(cf, lead.custom_data?.[cf.key])}
+                  />
+                ))}
+              </div>
+            </Section>
+          ))}
 
           <Section title="Checklist de etapas">
             <div className="grid grid-cols-2 gap-y-1.5 gap-x-2">

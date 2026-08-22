@@ -27,7 +27,14 @@ import {
 import { Plus, AlertTriangle, Search, X } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
-import { formatBRL, saleDay } from "@/lib/date-ranges";
+import {
+  formatBRL,
+  saleDay,
+  type DateBasis,
+  type Period,
+  PERIOD_LABEL,
+  periodRange,
+} from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
 import { useLeads } from "@/hooks/use-leads";
@@ -87,59 +94,6 @@ function serviceTag(service: string) {
 }
 
 const ALL = "__all__";
-
-/** Qual data o filtro de período considera. */
-type DateBasis = "entry" | "sale";
-
-type Period = "all" | "today" | "7d" | "30d" | "month" | "lastmonth" | "custom";
-
-const PERIOD_LABEL: Record<Exclude<Period, "custom">, string> = {
-  all: "Todo o período",
-  today: "Hoje",
-  "7d": "Últimos 7 dias",
-  "30d": "Últimos 30 dias",
-  month: "Este mês",
-  lastmonth: "Mês passado",
-};
-
-function iso(d: Date): string {
-  // Data local (não UTC) — toISOString() joga pro dia anterior no fuso do Brasil.
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-    d.getDate(),
-  ).padStart(2, "0")}`;
-}
-
-/** Faixa [from, to] inclusiva em YYYY-MM-DD. `null` = sem limite daquele lado. */
-function periodRange(p: Period): { from: string | null; to: string | null } {
-  const now = new Date();
-  const today = iso(now);
-  switch (p) {
-    case "today":
-      return { from: today, to: today };
-    case "7d": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 6);
-      return { from: iso(d), to: today };
-    }
-    case "30d": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - 29);
-      return { from: iso(d), to: today };
-    }
-    case "month":
-      return {
-        from: iso(new Date(now.getFullYear(), now.getMonth(), 1)),
-        to: iso(new Date(now.getFullYear(), now.getMonth() + 1, 0)),
-      };
-    case "lastmonth":
-      return {
-        from: iso(new Date(now.getFullYear(), now.getMonth() - 1, 1)),
-        to: iso(new Date(now.getFullYear(), now.getMonth(), 0)),
-      };
-    default:
-      return { from: null, to: null };
-  }
-}
 
 function CRMPage() {
   const qc = useQueryClient();
@@ -236,7 +190,9 @@ function CRMPage() {
   const filteredLeads = useMemo(() => {
     const q = search.trim().toLowerCase();
     const { from, to } =
-      period === "custom" ? { from: customFrom || null, to: customTo || null } : periodRange(period);
+      period === "custom"
+        ? { from: customFrom || null, to: customTo || null }
+        : periodRange(period);
 
     return leads.filter((l) => {
       if (q && !l.name.toLowerCase().includes(q) && !(l.phone ?? "").toLowerCase().includes(q)) {
@@ -453,9 +409,7 @@ function CRMPage() {
           <div className="flex gap-4 h-full min-w-max pb-2">
             {COLUMNS.map((col) => {
               const items = filteredLeads.filter((l) => l.stage === col.id);
-              return (
-                <KanbanColumn key={col.id} col={col} items={items} onOpen={setOpenLead} />
-              );
+              return <KanbanColumn key={col.id} col={col} items={items} onOpen={setOpenLead} />;
             })}
           </div>
         </div>
@@ -539,7 +493,9 @@ function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
         "bg-background border rounded-lg p-3 cursor-pointer transition-colors touch-none",
-        overdue ? "border-destructive/60 hover:border-destructive" : "border-border hover:border-primary/50",
+        overdue
+          ? "border-destructive/60 hover:border-destructive"
+          : "border-border hover:border-primary/50",
         isDragging && "opacity-40",
       )}
     >
