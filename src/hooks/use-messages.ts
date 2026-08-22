@@ -36,6 +36,11 @@ const N8N_SEND_WEBHOOK_URL =
  * grava no banco (não o front) para o registro só existir se o envio de
  * fato aconteceu — evita mensagem "fantasma" marcada como enviada sem ter
  * saído de verdade.
+ *
+ * O n8n valida o token de sessão do Supabase (Authorization: Bearer ...)
+ * chamando /auth/v1/user antes de processar — sem isso, qualquer visitante
+ * do site conseguiria chamar o webhook direto e mandar WhatsApp em nome da
+ * clínica para qualquer número (achado de segurança corrigido em 2026-08-22).
  */
 export function useSendMessage(lead: Lead | null) {
   const qc = useQueryClient();
@@ -44,17 +49,21 @@ export function useSendMessage(lead: Lead | null) {
       if (!lead) throw new Error("Nenhum lead selecionado");
       if (!lead.phone_e164) throw new Error("Lead sem telefone válido para WhatsApp");
       const {
-        data: { user },
-      } = await supabase.auth.getUser();
+        data: { session },
+      } = await supabase.auth.getSession();
+      if (!session) throw new Error("Sessão expirada — faça login novamente");
 
       const res = await fetch(N8N_SEND_WEBHOOK_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
         body: JSON.stringify({
           lead_id: lead.id,
           phone_e164: lead.phone_e164,
           text,
-          sender_name: user?.email ?? "Equipe",
+          sender_name: session.user.email ?? "Equipe",
         }),
       });
       if (!res.ok) throw new Error("Falha ao enviar mensagem pelo WhatsApp");
