@@ -71,6 +71,7 @@ export interface Lead {
   last_inbound_at: string | null;
   last_outbound_at: string | null;
   confirmation_status: "confirmado" | "remarcar" | null;
+  chat_closed_at: string | null;
 }
 
 export const COLUMNS = [

@@ -255,6 +255,7 @@ export type Database = {
           calls: Json;
           calls_answered: number;
           calls_made: number;
+          chat_closed_at: string | null;
           checklist: Json;
           closed_at: string | null;
           confirmation_status: string | null;
@@ -289,6 +290,7 @@ export type Database = {
           calls?: Json;
           calls_answered?: number;
           calls_made?: number;
+          chat_closed_at?: string | null;
           checklist?: Json;
           closed_at?: string | null;
           confirmation_status?: string | null;
@@ -323,6 +325,7 @@ export type Database = {
           calls?: Json;
           calls_answered?: number;
           calls_made?: number;
+          chat_closed_at?: string | null;
           checklist?: Json;
           closed_at?: string | null;
           confirmation_status?: string | null;
