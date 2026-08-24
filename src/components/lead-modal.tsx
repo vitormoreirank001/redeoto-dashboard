@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { Trash2, CalendarPlus, MessageCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
 import { useSendMessage } from "@/hooks/use-messages";
+import { cn } from "@/lib/utils";
 
 export interface CustomField {
   key: string;
@@ -310,6 +311,18 @@ export function LeadModal({
     }
   }
 
+  async function setConfirmationStatus(value: "confirmado" | "remarcar") {
+    if (isNew || !lead) return;
+    // Clicar na tag já ativa desmarca (volta pra null) — senão fica preso.
+    const next = lead.confirmation_status === value ? null : value;
+    const { error } = await supabase
+      .from("leads")
+      .update({ confirmation_status: next })
+      .eq("id", lead.id);
+    if (error) return toast.error(error.message);
+    qc.invalidateQueries({ queryKey: ["leads"] });
+  }
+
   async function sendReminder() {
     if (!reminderMsg.trim()) return;
     try {
@@ -365,15 +378,33 @@ export function LeadModal({
                 <MessageCircle className="h-4 w-4" /> Lembrete —{" "}
                 {formatApptForMessage(form.appointment_date)}
               </div>
-              {lead?.confirmation_status === "confirmado" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/15 text-[#16A34A] font-medium">
-                  Confirmado
-                </span>
-              )}
-              {lead?.confirmation_status === "remarcar" && (
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-[#D97706] font-medium">
-                  Lead pediu para remarcar
-                </span>
+              {!isNew && (
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmationStatus("confirmado")}
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors",
+                      lead?.confirmation_status === "confirmado"
+                        ? "bg-success/15 text-[#16A34A]"
+                        : "bg-muted text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Confirmado
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setConfirmationStatus("remarcar")}
+                    className={cn(
+                      "text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors",
+                      lead?.confirmation_status === "remarcar"
+                        ? "bg-warning/15 text-[#D97706]"
+                        : "bg-muted text-muted-foreground hover:text-foreground",
+                    )}
+                  >
+                    Pediu para remarcar
+                  </button>
+                </div>
               )}
             </div>
             <Textarea
