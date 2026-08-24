@@ -18,6 +18,7 @@ import type { Lead } from "@/routes/_authenticated/crm";
 import { toast } from "sonner";
 import { Trash2, CalendarPlus, MessageCircle } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
+import { useSendMessage } from "@/hooks/use-messages";
 
 export interface CustomField {
   key: string;
@@ -69,8 +70,12 @@ function formatApptForMessage(iso: string) {
 export function defaultReminderMessage(name: string, appointmentDate: string) {
   const firstName = name.trim().split(" ")[0] || "";
   return (
-    `Oi${firstName ? ` ${firstName}` : ""}! Passando para confirmar seu agendamento ` +
-    `${formatApptForMessage(appointmentDate)}. Qualquer dúvida, é só responder por aqui. Até breve!`
+    `📌 Olá${firstName ? ` ${firstName}` : ""},\n\n` +
+    `Lembre-se que você tem horário marcado em ${formatApptForMessage(appointmentDate)}\n\n` +
+    `Dra. Sara Honorato Matos\n\n` +
+    `Av. Capitão Aragão nº 551, Loja 02, Alto da Balança\n` +
+    `Fortaleza\n\n` +
+    `Digite 01 para confirmar e digite 02 para remarcar`
   );
 }
 
@@ -135,6 +140,7 @@ export function LeadModal({
 }) {
   const isNew = !lead;
   const { isAdmin } = useUserRole();
+  const reminderMutation = useSendMessage(lead);
   const [form, setForm] = useState<Partial<Lead>>(() => ({
     name: "",
     phone: "",
@@ -294,6 +300,16 @@ export function LeadModal({
     setReminderMsg(defaultReminderMessage(form.name ?? "", iso));
   }
 
+  async function sendReminder() {
+    if (!reminderMsg.trim()) return;
+    try {
+      await reminderMutation.mutateAsync(reminderMsg.trim());
+      toast.success("Lembrete enviado no chat");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar lembrete");
+    }
+  }
+
   function addNote() {
     if (!newNote.trim()) return;
     const entry = { at: new Date().toISOString(), text: newNote.trim() };
@@ -334,22 +350,37 @@ export function LeadModal({
 
         {!isNew && form.appointment_date && (
           <div className="rounded-lg border border-success/40 bg-success/5 p-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-[#16A34A]">
-              <MessageCircle className="h-4 w-4" /> Lembrete —{" "}
-              {formatApptForMessage(form.appointment_date)}
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center gap-2 text-sm font-medium text-[#16A34A]">
+                <MessageCircle className="h-4 w-4" /> Lembrete —{" "}
+                {formatApptForMessage(form.appointment_date)}
+              </div>
+              {lead?.confirmation_status === "confirmado" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/15 text-[#16A34A] font-medium">
+                  Confirmado
+                </span>
+              )}
+              {lead?.confirmation_status === "remarcar" && (
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-[#D97706] font-medium">
+                  Lead pediu para remarcar
+                </span>
+              )}
             </div>
             <Textarea
               className="mt-2 bg-background"
-              rows={3}
+              rows={6}
               value={reminderMsg}
               onChange={(e) => setReminderMsg(e.target.value)}
             />
             <div className="flex items-center justify-end mt-2">
               {form.phone_e164 ? (
-                <Button type="button" size="sm" asChild>
-                  <a href={waLink(form.phone_e164, reminderMsg)} target="_blank" rel="noreferrer">
-                    Enviar no WhatsApp
-                  </a>
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={sendReminder}
+                  disabled={reminderMutation.isPending || !reminderMsg.trim()}
+                >
+                  {reminderMutation.isPending ? "Enviando..." : "Enviar no Chat"}
                 </Button>
               ) : (
                 <p className="text-xs text-muted-foreground">

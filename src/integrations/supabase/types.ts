@@ -257,6 +257,7 @@ export type Database = {
           calls_made: number;
           checklist: Json;
           closed_at: string | null;
+          confirmation_status: string | null;
           created_at: string;
           created_by: string | null;
           custom_data: Json;
@@ -266,6 +267,7 @@ export type Database = {
           history: Json;
           id: string;
           last_inbound_at: string | null;
+          last_outbound_at: string | null;
           media: string;
           name: string;
           notes: string | null;
@@ -289,6 +291,7 @@ export type Database = {
           calls_made?: number;
           checklist?: Json;
           closed_at?: string | null;
+          confirmation_status?: string | null;
           created_at?: string;
           created_by?: string | null;
           custom_data?: Json;
@@ -298,6 +301,7 @@ export type Database = {
           history?: Json;
           id?: string;
           last_inbound_at?: string | null;
+          last_outbound_at?: string | null;
           media?: string;
           name: string;
           notes?: string | null;
@@ -321,6 +325,7 @@ export type Database = {
           calls_made?: number;
           checklist?: Json;
           closed_at?: string | null;
+          confirmation_status?: string | null;
           created_at?: string;
           created_by?: string | null;
           custom_data?: Json;
@@ -330,6 +335,7 @@ export type Database = {
           history?: Json;
           id?: string;
           last_inbound_at?: string | null;
+          last_outbound_at?: string | null;
           media?: string;
           name?: string;
           notes?: string | null;

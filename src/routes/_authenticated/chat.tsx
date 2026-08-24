@@ -29,6 +29,13 @@ function lastActivity(lead: Lead): string | null {
   return lead.last_inbound_at ?? lead.stage_changed_at ?? lead.updated_at ?? null;
 }
 
+/** Última mensagem foi do lead e ninguém da Redeorto respondeu ainda. */
+function awaitingReply(lead: Lead): boolean {
+  if (!lead.last_inbound_at) return false;
+  if (!lead.last_outbound_at) return true;
+  return lead.last_inbound_at > lead.last_outbound_at;
+}
+
 function relativeTime(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(ms / 60000);
@@ -72,7 +79,10 @@ function ChatPage() {
     const q = search.trim().toLowerCase();
     return leads
       .map((lead) => ({ lead, last: lastActivity(lead) }))
-      .filter(({ lead }) => !q || lead.name.toLowerCase().includes(q))
+      .filter(
+        ({ lead }) =>
+          !q || lead.name.toLowerCase().includes(q) || (lead.phone ?? "").toLowerCase().includes(q),
+      )
       .sort((a, b) => {
         if (!a.last && !b.last) return a.lead.name.localeCompare(b.lead.name);
         if (!a.last) return 1;
@@ -120,7 +130,7 @@ function ChatPage() {
               <Input
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Procurar..."
+                placeholder="Buscar por nome ou telefone..."
                 className="pl-8 h-9"
               />
             </div>
@@ -155,6 +165,23 @@ function ChatPage() {
                   <p className="text-xs text-muted-foreground truncate mt-0.5">
                     {lead.phone || "Sem telefone"}
                   </p>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {awaitingReply(lead) && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
+                        Sem resposta
+                      </span>
+                    )}
+                    {lead.confirmation_status === "confirmado" && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/15 text-[#16A34A] font-medium">
+                        Confirmado
+                      </span>
+                    )}
+                    {lead.confirmation_status === "remarcar" && (
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-warning/15 text-[#D97706] font-medium">
+                        Pediu para remarcar
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {lead.urgent && <span className="h-2 w-2 rounded-full bg-[#7C3AED] shrink-0" />}
               </button>

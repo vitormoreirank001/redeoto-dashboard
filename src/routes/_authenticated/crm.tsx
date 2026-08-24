@@ -69,6 +69,8 @@ export interface Lead {
   updated_at: string;
   stage_changed_at: string;
   last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  confirmation_status: "confirmado" | "remarcar" | null;
 }
 
 export const COLUMNS = [
