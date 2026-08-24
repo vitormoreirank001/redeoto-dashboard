@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import type { Tables } from "@/integrations/supabase/types";
 import type { Lead } from "@/routes/_authenticated/crm";
+import { LEADS_QUERY_KEY } from "@/hooks/use-leads";
 
 export type Message = Tables<"automation_messages">;
 
@@ -70,6 +71,10 @@ export function useSendMessage(lead: Lead | null) {
     },
     onSuccess: () => {
       if (lead) qc.invalidateQueries({ queryKey: messagesQueryKey(lead.id) });
+      // O envio atualiza leads.last_outbound_at (trigger no banco) — sem isso,
+      // a tag "Sem resposta" na lista de conversas fica desatualizada até o
+      // próximo refetch espontâneo do cache de leads.
+      qc.invalidateQueries({ queryKey: LEADS_QUERY_KEY });
     },
   });
 }

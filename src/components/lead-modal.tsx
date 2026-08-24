@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -142,6 +142,7 @@ export function LeadModal({
   const isNew = !lead;
   const { isAdmin } = useUserRole();
   const reminderMutation = useSendMessage(lead);
+  const qc = useQueryClient();
   const [form, setForm] = useState<Partial<Lead>>(() => ({
     name: "",
     phone: "",
@@ -291,14 +292,22 @@ export function LeadModal({
     onClose();
   }
 
-  function markScheduled() {
+  async function markScheduled() {
     const iso = fromDatetimeLocal(quickApptAt);
-    setForm((f) => ({
-      ...f,
-      appointment_date: iso,
-      stage: f.stage === "novo" || f.stage === "contato" ? "agendado" : f.stage,
-    }));
+    const nextStage = form.stage === "novo" || form.stage === "contato" ? "agendado" : form.stage;
+    setForm((f) => ({ ...f, appointment_date: iso, stage: nextStage }));
     setReminderMsg(defaultReminderMessage(form.name ?? "", iso));
+    // Salva na hora (não só no estado local do formulário) — sem isso, dá pra
+    // mandar o lembrete de agendamento pelo chat sem a data ter sido
+    // realmente salva, e o cartão do lead fica sem horário marcado.
+    if (!isNew && lead) {
+      const { error } = await supabase
+        .from("leads")
+        .update({ appointment_date: iso, stage: nextStage })
+        .eq("id", lead.id);
+      if (error) return toast.error(error.message);
+      qc.invalidateQueries({ queryKey: ["leads"] });
+    }
   }
 
   async function sendReminder() {
