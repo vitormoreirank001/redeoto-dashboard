@@ -22,6 +22,7 @@ const CHECKLIST = [
   { key: "followup_3d", label: "Follow-up 3 dias" },
   { key: "followup_7d", label: "Follow-up 7 dias" },
   { key: "followup_14d", label: "Follow-up 14 dias" },
+  { key: "pediu_remarcacao", label: "Pediu para remarcar" },
 ];
 
 function stageLabel(stage: string) {
