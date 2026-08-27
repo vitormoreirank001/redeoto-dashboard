@@ -1,13 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { MetricCard } from "@/components/metric-card";
+import { PageContainer } from "@/components/page-container";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Users,
   Calendar,
   CalendarCheck,
   ClipboardCheck,
-  FileText,
   CheckCircle2,
   PhoneCall,
   TrendingUp,
@@ -39,11 +46,13 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
+import { isAwaitingReply } from "@/lib/lead-sla";
 import { COLUMNS } from "./crm";
 import type { Lead } from "./crm";
 import { CalendarPlus, MessageCircle } from "lucide-react";
 import { useLeads } from "@/hooks/use-leads";
+import { useUserRole } from "@/hooks/use-user-role";
+import { OnboardingChecklist } from "@/components/onboarding-checklist";
 
 export const Route = createFileRoute("/_authenticated/dashboard")({
   component: DashboardPage,
@@ -57,8 +66,8 @@ const STAGE_LABEL: Record<string, { title: string }> = Object.fromEntries(
   COLUMNS.map((c) => [c.id, { title: c.title }]),
 );
 
-/** Há quanto tempo o lead está na etapa atual, em texto curto (min/h/d). */
-function timeInStage(iso: string): string {
+/** Tempo decorrido desde um instante, em texto curto (min/h/d). */
+function elapsedShort(iso: string): string {
   const ms = Date.now() - new Date(iso).getTime();
   const mins = Math.floor(ms / 60000);
   if (mins < 60) return `${mins}min`;
@@ -78,22 +87,19 @@ const REMINDER_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 interface ActionItem {
   lead: Lead;
-  kind: "overdue" | "no_appointment" | "reminder_upcoming";
+  kind: "awaiting_reply" | "no_appointment" | "reminder_upcoming";
   detail: string;
   sortKey: number;
 }
 
-/** Um motivo por lead, na ordem de urgência: atrasado > sem agendamento > lembrete próximo. */
+/** Um motivo por lead, na ordem de urgência: sem resposta > sem agendamento > lembrete próximo. */
 function buildActionItem(lead: Lead): ActionItem | null {
-  if (isOverdue(lead)) {
-    const followupStep = overdueFollowupStep(lead);
+  if (isAwaitingReply(lead)) {
     return {
       lead,
-      kind: "overdue",
-      detail: followupStep
-        ? `Follow-up ${followupStep.label} atrasado`
-        : `Há ${timeInStage(lead.stage_changed_at)} sem contato`,
-      sortKey: new Date(lead.stage_changed_at).getTime(),
+      kind: "awaiting_reply",
+      detail: `Sem resposta há ${elapsedShort(lead.last_inbound_at!)}`,
+      sortKey: new Date(lead.last_inbound_at!).getTime(),
     };
   }
   if (!lead.appointment_date && lead.stage !== "fechado" && lead.stage !== "perdido") {
@@ -120,6 +126,7 @@ function buildActionItem(lead: Lead): ActionItem | null {
 }
 
 function DashboardPage() {
+  const { isAdmin } = useUserRole();
   const [userName, setUserName] = useState("");
   const [revenuePeriod, setRevenuePeriod] = useState<Period>("month");
   const [revenueFrom, setRevenueFrom] = useState("");
@@ -226,7 +233,7 @@ function DashboardPage() {
   const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
-  const overdueCount = leads.filter(isOverdue).length;
+  const awaitingReplyCount = leads.filter(isAwaitingReply).length;
 
   const actionQueue = leads
     .map(buildActionItem)
@@ -234,7 +241,7 @@ function DashboardPage() {
     .sort((a, b) => a.sortKey - b.sortKey);
 
   return (
-    <div className="p-4 lg:p-6 space-y-6 max-w-[1600px] mx-auto">
+    <PageContainer className="space-y-6">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Visão Geral</h1>
         <p className="text-muted-foreground mt-0.5 text-sm capitalize">
@@ -242,6 +249,8 @@ function DashboardPage() {
           {userName ? `, ${userName}` : ""}
         </p>
       </header>
+
+      {isAdmin && <OnboardingChecklist />}
 
       {expiringItems.length > 0 && (
         <Link
@@ -256,8 +265,8 @@ function DashboardPage() {
       )}
 
       <section className="grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-2 rounded-2xl bg-card border-2 border-primary/50 shadow-sm p-5 relative overflow-hidden">
-          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl pointer-events-none" />
+        <div className="lg:col-span-2 rounded-2xl bg-card border border-border shadow-sm p-5 relative overflow-hidden">
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/[0.06] blur-3xl pointer-events-none" />
           <div className="relative">
             <div className="flex items-start justify-between flex-wrap gap-4">
               <div>
@@ -328,18 +337,20 @@ function DashboardPage() {
         <Link
           to="/crm"
           className={cn(
-            "rounded-2xl border-2 shadow-sm p-5 flex flex-col justify-between transition-colors",
-            overdueCount > 0
+            "relative overflow-hidden rounded-2xl border-2 shadow-sm p-5 pl-6 flex flex-col justify-between transition-colors",
+            "before:absolute before:inset-y-0 before:left-0 before:w-1.5",
+            awaitingReplyCount > 0 ? "before:bg-primary" : "before:bg-transparent",
+            awaitingReplyCount > 0
               ? "bg-destructive/5 border-destructive/40 hover:border-destructive"
               : "bg-card border-border hover:border-primary/40",
           )}
         >
           <div className="flex items-start justify-between">
-            <p className="text-sm text-muted-foreground">Leads atrasados</p>
+            <p className="text-sm text-muted-foreground">Leads sem resposta</p>
             <div
               className={cn(
                 "h-9 w-9 rounded-lg flex items-center justify-center",
-                overdueCount > 0
+                awaitingReplyCount > 0
                   ? "bg-destructive/15 text-destructive"
                   : "bg-secondary text-muted-foreground",
               )}
@@ -351,15 +362,13 @@ function DashboardPage() {
             <p
               className={cn(
                 "text-4xl font-extrabold mt-1",
-                overdueCount > 0 ? "text-destructive" : "text-foreground",
+                awaitingReplyCount > 0 ? "text-destructive" : "text-foreground",
               )}
             >
-              {overdueCount}
+              {awaitingReplyCount}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {overdueCount > 0
-                ? "Sem contato dentro do prazo — ver no CRM"
-                : "Tudo dentro do prazo"}
+              {awaitingReplyCount > 0 ? "Aguardando sua resposta — ver no CRM" : "Tudo respondido"}
             </p>
           </div>
         </Link>
@@ -375,9 +384,7 @@ function DashboardPage() {
             <div
               className={cn(
                 "h-9 w-9 rounded-lg flex items-center justify-center",
-                apptToday > 0
-                  ? "bg-success/15 text-[#16A34A]"
-                  : "bg-secondary text-muted-foreground",
+                apptToday > 0 ? "bg-success/15 text-success" : "bg-secondary text-muted-foreground",
               )}
             >
               <CalendarCheck className="h-4 w-4" />
@@ -387,16 +394,96 @@ function DashboardPage() {
             <p
               className={cn(
                 "text-4xl font-extrabold mt-1",
-                apptToday > 0 ? "text-[#16A34A]" : "text-foreground",
+                apptToday > 0 ? "text-success" : "text-foreground",
               )}
             >
               {apptToday}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {apptToday > 0 ? "Paciente(s) agendado(s) para hoje" : "Nenhum agendamento para hoje"}
+              {apptToday > 0 ? "Cliente(s) agendado(s) para hoje" : "Nenhum agendamento para hoje"}
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl bg-card border border-border shadow-sm p-5">
+        <h2 className="text-sm font-semibold mb-3">Resumo do dia</h2>
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Métrica</TableHead>
+                <TableHead className="text-right">Hoje</TableHead>
+                <TableHead className="text-right">Ontem</TableHead>
+                <TableHead className="text-right">Semana</TableHead>
+                <TableHead className="text-right">Mês</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {[
+                {
+                  label: "Leads",
+                  icon: Users,
+                  today: countBetween(leadsByDate, t, t),
+                  yesterday: countBetween(leadsByDate, y, y),
+                  week: countBetween(leadsByDate, ws, t),
+                  month: countBetween(leadsByDate, ms, me),
+                },
+                {
+                  label: "Agendamentos",
+                  icon: Calendar,
+                  today: countBetween(apptByDate, t, t),
+                  yesterday: countBetween(apptByDate, y, y),
+                  week: countBetween(apptByDate, ws, t),
+                  month: countBetween(apptByDate, ms, me),
+                },
+                {
+                  label: "Avaliações/Orçamentos",
+                  icon: ClipboardCheck,
+                  today: countBetween(evalByDate, t, t) + countBetween(quoteByDate, t, t),
+                  yesterday: countBetween(evalByDate, y, y) + countBetween(quoteByDate, y, y),
+                  week: countBetween(evalByDate, ws, t) + countBetween(quoteByDate, ws, t),
+                  month: countBetween(evalByDate, ms, me) + countBetween(quoteByDate, ms, me),
+                },
+                {
+                  label: "Vendas",
+                  icon: CheckCircle2,
+                  today: countBetween(salesByDate, t, t),
+                  yesterday: countBetween(salesByDate, y, y),
+                  week: countBetween(salesByDate, ws, t),
+                  month: countBetween(salesByDate, ms, me),
+                },
+                {
+                  label: "Ligações",
+                  icon: PhoneCall,
+                  today: sumCalls("made", t, t),
+                  yesterday: sumCalls("made", y, y),
+                  week: sumCalls("made", ws, t),
+                  month: made,
+                },
+              ].map((row) => (
+                <TableRow key={row.label}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-2">
+                      <row.icon className="h-3.5 w-3.5 text-primary shrink-0" strokeWidth={1.75} />
+                      {row.label}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono-data">{row.today}</TableCell>
+                  <TableCell className="text-right font-mono-data">{row.yesterday}</TableCell>
+                  <TableCell className="text-right font-mono-data">{row.week}</TableCell>
+                  <TableCell className="text-right font-mono-data font-semibold">
+                    {row.month}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+        <p className="text-xs text-muted-foreground mt-3">
+          Ligações atendidas: <span className="text-foreground font-medium">{ans}</span> no mês ·{" "}
+          <span className="text-primary font-semibold">{rate}%</span> de atendimento
+        </p>
       </section>
 
       <section className="rounded-2xl bg-card border border-border shadow-sm p-5">
@@ -421,15 +508,15 @@ function DashboardPage() {
             {actionQueue.slice(0, 8).map(({ lead, kind, detail }) => {
               const stageInfo = STAGE_LABEL[lead.stage];
               const detailCls =
-                kind === "overdue"
+                kind === "awaiting_reply"
                   ? "text-destructive"
                   : kind === "no_appointment"
-                    ? "text-[#D97706]"
-                    : "text-[#16A34A]";
+                    ? "text-warning"
+                    : "text-success";
               // Leva pro chat do próprio sistema (não pro wa.me) — tanto pra
-              // cobrar o atraso quanto pra confirmar o agendamento.
+              // responder quanto pra confirmar o agendamento.
               const showChatButton =
-                !!lead.phone_e164 && (kind === "reminder_upcoming" || kind === "overdue");
+                !!lead.phone_e164 && (kind === "reminder_upcoming" || kind === "awaiting_reply");
               return (
                 <Link
                   key={lead.id}
@@ -458,7 +545,7 @@ function DashboardPage() {
                       to="/chat"
                       search={{ lead: lead.id }}
                       onClick={(e) => e.stopPropagation()}
-                      className="shrink-0 h-8 w-8 rounded-lg bg-success/15 text-[#16A34A] flex items-center justify-center hover:bg-success/25 transition-colors"
+                      className="shrink-0 h-8 w-8 rounded-lg bg-success/15 text-success flex items-center justify-center hover:bg-success/25 transition-colors"
                       title="Abrir conversa"
                     >
                       <MessageCircle className="h-4 w-4" />
@@ -475,65 +562,6 @@ function DashboardPage() {
           </div>
         )}
       </section>
-
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-        <MetricCard
-          title="Leads"
-          icon={Users}
-          size="lg"
-          className="col-span-2"
-          today={countBetween(leadsByDate, t, t)}
-          yesterday={countBetween(leadsByDate, y, y)}
-          week={countBetween(leadsByDate, ws, t)}
-          month={countBetween(leadsByDate, ms, me)}
-        />
-        <MetricCard
-          title="Agendamentos"
-          icon={Calendar}
-          today={countBetween(apptByDate, t, t)}
-          yesterday={countBetween(apptByDate, y, y)}
-          week={countBetween(apptByDate, ws, t)}
-          month={countBetween(apptByDate, ms, me)}
-        />
-        <MetricCard
-          title="Avaliações"
-          icon={ClipboardCheck}
-          today={countBetween(evalByDate, t, t)}
-          yesterday={countBetween(evalByDate, y, y)}
-          week={countBetween(evalByDate, ws, t)}
-          month={countBetween(evalByDate, ms, me)}
-        />
-        <MetricCard
-          title="Orçamentos"
-          icon={FileText}
-          today={countBetween(quoteByDate, t, t)}
-          yesterday={countBetween(quoteByDate, y, y)}
-          week={countBetween(quoteByDate, ws, t)}
-          month={countBetween(quoteByDate, ms, me)}
-        />
-        <MetricCard
-          title="Vendas"
-          icon={CheckCircle2}
-          today={countBetween(salesByDate, t, t)}
-          yesterday={countBetween(salesByDate, y, y)}
-          week={countBetween(salesByDate, ws, t)}
-          month={countBetween(salesByDate, ms, me)}
-        />
-        <MetricCard
-          title="Ligações"
-          icon={PhoneCall}
-          today={sumCalls("made", t, t)}
-          yesterday={sumCalls("made", y, y)}
-          week={sumCalls("made", ws, t)}
-          month={made}
-          footer={
-            <p className="text-xs text-muted-foreground">
-              Atendidas: <span className="text-foreground font-medium">{ans}</span> no mês ·{" "}
-              <span className="text-primary font-semibold">{rate}%</span> de atendimento
-            </p>
-          }
-        />
-      </div>
-    </div>
+    </PageContainer>
   );
 }
