@@ -24,7 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, AlertTriangle, Search, X } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
+import { Plus, AlertTriangle, Search, SlidersHorizontal, X } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
 import { toast } from "sonner";
 import {
@@ -36,8 +38,10 @@ import {
   periodRange,
 } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
-import { isOverdue, overdueFollowupStep } from "@/lib/lead-sla";
+import { isAwaitingReply, leadUrgencyTone } from "@/lib/lead-sla";
+import type { Json } from "@/integrations/supabase/types";
 import { useLeads } from "@/hooks/use-leads";
+import { PageContainer } from "@/components/page-container";
 
 export const Route = createFileRoute("/_authenticated/crm")({
   component: CRMPage,
@@ -65,7 +69,11 @@ export interface Lead {
   notes: string | null;
   history: Array<{ at: string; text: string }>;
   calls: Array<{ at: string; answered: boolean }>;
-  custom_data: Record<string, string | number | boolean | null>;
+  // Guarda-chuva pra campos personalizados (custom_fields) e pros campos novos
+  // do painel do Kommo que ainda não têm coluna própria (CPF, nascimento,
+  // unidade, usuário responsável, histórico de agendamentos/vendas/visitas) —
+  // ficam aqui até a migration ser aprovada, sem quebrar nada hoje.
+  custom_data: Record<string, Json>;
   updated_at: string;
   stage_changed_at: string;
   last_inbound_at: string | null;
@@ -89,7 +97,7 @@ export const COLUMNS = [
 // legadas e cai num tom neutro pra qualquer nome novo que a equipe digitar.
 const SERVICE_LABEL: Record<string, { text: string; cls: string }> = {
   implante: { text: "Implante", cls: "bg-primary/15 text-primary" },
-  aparelho: { text: "Aparelho", cls: "bg-warning/15 text-[#D97706]" },
+  aparelho: { text: "Aparelho", cls: "bg-warning/15 text-warning" },
   outros: { text: "Outros", cls: "bg-muted text-muted-foreground" },
 };
 
@@ -110,14 +118,28 @@ function CRMPage() {
   const [filterMedia, setFilterMedia] = useState(ALL);
   const [filterOrigin, setFilterOrigin] = useState(ALL);
   const [filterService, setFilterService] = useState(ALL);
+  const [filterUnit, setFilterUnit] = useState(ALL);
+  const [selectedStages, setSelectedStages] = useState<string[]>(() => COLUMNS.map((c) => c.id));
   const [onlyUrgent, setOnlyUrgent] = useState(false);
-  const [onlyOverdue, setOnlyOverdue] = useState(false);
+  const [onlyAwaitingReply, setOnlyAwaitingReply] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
   const [dateBasis, setDateBasis] = useState<DateBasis>("entry");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: leads = [] } = useLeads();
+
+  // Serviço é texto livre — o filtro lista o que a equipe já digitou, em vez
+  // de opções fixas de um único nicho (implante/aparelho não fazem sentido
+  // pra qualquer negócio que use o sistema).
+  const serviceOptions = useMemo(
+    () =>
+      Array.from(new Set(leads.map((l) => l.service).filter((s): s is string => !!s?.trim()))).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [leads],
+  );
 
   // Deep link vindo da fila "Contate agora" do Home (?lead=<id>): abre o modal
   // direto e limpa o parâmetro pra não reabrir se a pessoa navegar de volta.
@@ -139,7 +161,8 @@ function CRMPage() {
         .order("sort_order");
       const midia = (data ?? []).filter((o) => o.field_key === "midia").map((o) => o.value);
       const origem = (data ?? []).filter((o) => o.field_key === "origem").map((o) => o.value);
-      return { midia, origem };
+      const unidade = (data ?? []).filter((o) => o.field_key === "unidade").map((o) => o.value);
+      return { midia, origem, unidade };
     },
   });
 
@@ -205,8 +228,12 @@ function CRMPage() {
       if (filterMedia !== ALL && l.media !== filterMedia) return false;
       if (filterOrigin !== ALL && l.origin !== filterOrigin) return false;
       if (filterService !== ALL && l.service !== filterService) return false;
+      if (filterUnit !== ALL && (l.custom_data?.unidade as string | undefined) !== filterUnit) {
+        return false;
+      }
+      if (!selectedStages.includes(l.stage)) return false;
       if (onlyUrgent && !l.urgent) return false;
-      if (onlyOverdue && !isOverdue(l)) return false;
+      if (onlyAwaitingReply && !isAwaitingReply(l)) return false;
 
       if (from || to) {
         // Na base "venda", quem não fechou não tem data e sai do resultado.
@@ -228,8 +255,10 @@ function CRMPage() {
     filterMedia,
     filterOrigin,
     filterService,
+    filterUnit,
+    selectedStages,
     onlyUrgent,
-    onlyOverdue,
+    onlyAwaitingReply,
     period,
     dateBasis,
     customFrom,
@@ -245,30 +274,45 @@ function CRMPage() {
     [filteredLeads],
   );
 
-  const hasActiveFilters =
-    !!search ||
-    filterMedia !== ALL ||
-    filterOrigin !== ALL ||
-    filterService !== ALL ||
-    onlyUrgent ||
-    onlyOverdue ||
-    period !== "all";
+  const activeFilterCount = [
+    filterMedia !== ALL,
+    filterOrigin !== ALL,
+    filterService !== ALL,
+    filterUnit !== ALL,
+    selectedStages.length !== COLUMNS.length,
+    onlyUrgent,
+    onlyAwaitingReply,
+    period !== "all",
+  ].filter(Boolean).length;
+
+  const hasActiveFilters = !!search || activeFilterCount > 0;
 
   function clearFilters() {
     setSearch("");
     setFilterMedia(ALL);
     setFilterOrigin(ALL);
     setFilterService(ALL);
+    setFilterUnit(ALL);
+    setSelectedStages(COLUMNS.map((c) => c.id));
     setOnlyUrgent(false);
-    setOnlyOverdue(false);
+    setOnlyAwaitingReply(false);
     setPeriod("all");
     setDateBasis("entry");
     setCustomFrom("");
     setCustomTo("");
   }
 
+  function toggleStage(stageId: string) {
+    setSelectedStages((prev) =>
+      prev.includes(stageId) ? prev.filter((s) => s !== stageId) : [...prev, stageId],
+    );
+  }
+
   return (
-    <div className="p-4 lg:p-6 space-y-4 h-[calc(100dvh-3.5rem-4rem)] lg:h-screen flex flex-col">
+    <PageContainer
+      bleed
+      className="space-y-4 h-[calc(100dvh-3.5rem-4rem)] lg:h-screen flex flex-col"
+    >
       <header className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">CRM</h1>
@@ -289,108 +333,184 @@ function CRMPage() {
             className="pl-8 h-9"
           />
         </div>
-        <Select value={filterMedia} onValueChange={setFilterMedia}>
-          <SelectTrigger className="h-9 w-auto min-w-[130px]">
-            <SelectValue placeholder="Mídia" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as mídias</SelectItem>
-            {(options?.midia ?? []).map((v) => (
-              <SelectItem key={v} value={v}>
-                {v}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterOrigin} onValueChange={setFilterOrigin}>
-          <SelectTrigger className="h-9 w-auto min-w-[130px]">
-            <SelectValue placeholder="Origem" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todas as origens</SelectItem>
-            {(options?.origem ?? []).map((v) => (
-              <SelectItem key={v} value={v}>
-                {v}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={filterService} onValueChange={setFilterService}>
-          <SelectTrigger className="h-9 w-auto min-w-[120px]">
-            <SelectValue placeholder="Serviço" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value={ALL}>Todos os serviços</SelectItem>
-            <SelectItem value="implante">Implante</SelectItem>
-            <SelectItem value="aparelho">Aparelho</SelectItem>
-            <SelectItem value="outros">Outros</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-          <SelectTrigger className="h-9 w-auto min-w-[140px]">
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent>
-            {(Object.keys(PERIOD_LABEL) as Array<keyof typeof PERIOD_LABEL>).map((p) => (
-              <SelectItem key={p} value={p}>
-                {PERIOD_LABEL[p]}
-              </SelectItem>
-            ))}
-            <SelectItem value="custom">Personalizado…</SelectItem>
-          </SelectContent>
-        </Select>
-        {period !== "all" && (
-          <Select value={dateBasis} onValueChange={(v) => setDateBasis(v as DateBasis)}>
-            <SelectTrigger className="h-9 w-auto min-w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="entry">por data de entrada</SelectItem>
-              <SelectItem value="sale">por data da venda</SelectItem>
-            </SelectContent>
-          </Select>
-        )}
-        {period === "custom" && (
-          <div className="flex items-center gap-1.5">
-            <Input
-              type="date"
-              value={customFrom}
-              onChange={(e) => setCustomFrom(e.target.value)}
-              className="h-9 w-auto"
-              aria-label="Data inicial"
-            />
-            <span className="text-xs text-muted-foreground">até</span>
-            <Input
-              type="date"
-              value={customTo}
-              onChange={(e) => setCustomTo(e.target.value)}
-              className="h-9 w-auto"
-              aria-label="Data final"
-            />
-          </div>
-        )}
-        <button
-          onClick={() => setOnlyUrgent((v) => !v)}
-          className={cn(
-            "text-xs px-3 h-9 rounded-md border font-medium transition-colors",
-            onlyUrgent
-              ? "bg-purple/15 border-purple text-[#7C3AED]"
-              : "border-border text-muted-foreground hover:text-foreground",
-          )}
-        >
-          Urgentes
-        </button>
-        <button
-          onClick={() => setOnlyOverdue((v) => !v)}
-          className={cn(
-            "text-xs px-3 h-9 rounded-md border font-medium transition-colors",
-            onlyOverdue
-              ? "bg-destructive/15 border-destructive text-destructive"
-              : "border-border text-muted-foreground hover:text-foreground",
-          )}
-        >
-          Atrasados
-        </button>
+
+        <Sheet open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <SheetTrigger asChild>
+            <Button variant="outline" className="h-9 gap-2">
+              <SlidersHorizontal className="h-3.5 w-3.5" />
+              Filtros
+              {activeFilterCount > 0 && (
+                <span className="h-5 min-w-5 px-1 rounded-full bg-primary text-primary-foreground text-[11px] font-semibold flex items-center justify-center">
+                  {activeFilterCount}
+                </span>
+              )}
+            </Button>
+          </SheetTrigger>
+          <SheetContent className="w-full sm:max-w-sm overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Propriedades do lead</SheetTitle>
+            </SheetHeader>
+
+            <div className="mt-6 space-y-5">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Data</label>
+                <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Todo período" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.keys(PERIOD_LABEL) as Array<keyof typeof PERIOD_LABEL>).map((p) => (
+                      <SelectItem key={p} value={p}>
+                        {PERIOD_LABEL[p]}
+                      </SelectItem>
+                    ))}
+                    <SelectItem value="custom">Personalizado…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {period !== "all" && (
+                  <Select value={dateBasis} onValueChange={(v) => setDateBasis(v as DateBasis)}>
+                    <SelectTrigger className="h-9 w-full">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="entry">por data de entrada</SelectItem>
+                      <SelectItem value="sale">por data da venda</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
+                {period === "custom" && (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      type="date"
+                      value={customFrom}
+                      onChange={(e) => setCustomFrom(e.target.value)}
+                      className="h-9"
+                      aria-label="Data inicial"
+                    />
+                    <span className="text-xs text-muted-foreground shrink-0">até</span>
+                    <Input
+                      type="date"
+                      value={customTo}
+                      onChange={(e) => setCustomTo(e.target.value)}
+                      className="h-9"
+                      aria-label="Data final"
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Etapas ativas</label>
+                <div className="border border-border rounded-lg p-2.5 space-y-2">
+                  {COLUMNS.map((col) => (
+                    <label key={col.id} className="flex items-center gap-2 text-sm cursor-pointer">
+                      <Checkbox
+                        checked={selectedStages.includes(col.id)}
+                        onCheckedChange={() => toggleStage(col.id)}
+                      />
+                      {col.title}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Mídia</label>
+                <Select value={filterMedia} onValueChange={setFilterMedia}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Todas as mídias" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todas as mídias</SelectItem>
+                    {(options?.midia ?? []).map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Origem</label>
+                <Select value={filterOrigin} onValueChange={setFilterOrigin}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Todas as origens" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todas as origens</SelectItem>
+                    {(options?.origem ?? []).map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Serviço</label>
+                <Select value={filterService} onValueChange={setFilterService}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Todos os serviços" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todos os serviços</SelectItem>
+                    {serviceOptions.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {SERVICE_LABEL[s]?.text ?? s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Unidade</label>
+                <Select value={filterUnit} onValueChange={setFilterUnit}>
+                  <SelectTrigger className="h-9 w-full">
+                    <SelectValue placeholder="Todas as unidades" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value={ALL}>Todas as unidades</SelectItem>
+                    {(options?.unidade ?? []).map((v) => (
+                      <SelectItem key={v} value={v}>
+                        {v}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2 pt-3 border-t border-border">
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox checked={onlyUrgent} onCheckedChange={(v) => setOnlyUrgent(!!v)} />
+                  Só urgentes
+                </label>
+                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                  <Checkbox
+                    checked={onlyAwaitingReply}
+                    onCheckedChange={(v) => setOnlyAwaitingReply(!!v)}
+                  />
+                  Só sem resposta
+                </label>
+              </div>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between gap-2 pt-4 border-t border-border">
+              <button
+                onClick={clearFilters}
+                className="text-xs px-2 h-9 rounded-md text-muted-foreground hover:text-foreground flex items-center gap-1"
+              >
+                <X className="h-3.5 w-3.5" /> Limpar filtros
+              </button>
+              <Button size="sm" onClick={() => setFiltersOpen(false)}>
+                Aplicar
+              </Button>
+            </div>
+          </SheetContent>
+        </Sheet>
+
         {hasActiveFilters && (
           <button
             onClick={clearFilters}
@@ -439,7 +559,7 @@ function CRMPage() {
           }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }
 
@@ -483,11 +603,17 @@ function KanbanColumn({
   );
 }
 
+const TEMPERATURE_BAR: Record<"urgent" | "cooling", string> = {
+  urgent: "before:bg-primary",
+  cooling: "before:bg-frio",
+};
+
 function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: lead.id,
   });
-  const overdue = isOverdue(lead);
+  const awaitingReply = isAwaitingReply(lead);
+  const tone = leadUrgencyTone(lead);
   return (
     <div
       ref={setNodeRef}
@@ -496,8 +622,10 @@ function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void
       onClick={() => onOpen(lead)}
       style={{ transform: CSS.Translate.toString(transform) }}
       className={cn(
-        "bg-background border rounded-lg p-3 cursor-pointer transition-colors touch-none",
-        overdue
+        "relative bg-background border rounded-lg p-3 pl-4 cursor-pointer transition-colors touch-none",
+        "before:absolute before:inset-y-0 before:left-0 before:w-1 before:rounded-l-lg",
+        tone ? TEMPERATURE_BAR[tone] : "before:bg-transparent",
+        awaitingReply
           ? "border-destructive/60 hover:border-destructive"
           : "border-border hover:border-primary/50",
         isDragging && "opacity-40",
@@ -509,21 +637,20 @@ function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void
 }
 
 function LeadCardBody({ lead }: { lead: Lead }) {
-  const overdue = isOverdue(lead);
-  const followupStep = overdueFollowupStep(lead);
+  const awaitingReply = isAwaitingReply(lead);
   return (
     <>
       <div className="flex items-start justify-between gap-2">
         <h4 className="font-semibold text-sm truncate">{lead.name}</h4>
         <div className="flex items-center gap-1 shrink-0">
-          {overdue && (
+          {awaitingReply && (
             <span className="flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded bg-destructive/15 text-destructive font-medium">
               <AlertTriangle className="h-3 w-3" />
-              {followupStep ? `Follow-up ${followupStep.label}` : "Atrasado"}
+              Sem resposta
             </span>
           )}
           {lead.urgent && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-[#7C3AED] font-medium">
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-purple/15 text-purple font-medium">
               Urgente
             </span>
           )}
@@ -532,7 +659,7 @@ function LeadCardBody({ lead }: { lead: Lead }) {
       {lead.phone && <p className="text-xs text-muted-foreground mt-1">{lead.phone}</p>}
       <div className="flex flex-wrap gap-1 mt-2">
         {lead.media && <Tag text={lead.media} cls="bg-secondary text-foreground" />}
-        {lead.origin && <Tag text={lead.origin} cls="bg-success/15 text-[#16A34A]" />}
+        {lead.origin && <Tag text={lead.origin} cls="bg-success/15 text-success" />}
         <Tag {...serviceTag(lead.service)} />
       </div>
       <div className="flex items-center justify-between mt-3 pt-2 border-t border-border">
