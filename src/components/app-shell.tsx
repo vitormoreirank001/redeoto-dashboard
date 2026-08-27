@@ -101,15 +101,14 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen flex bg-background text-foreground">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex bg-background text-foreground">
       <aside className="hidden lg:flex w-64 shrink-0 bg-sidebar border-r border-sidebar-border flex-col">
         <div className="px-6 py-6 border-b border-sidebar-border">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-9 max-w-[160px] object-contain" />
           ) : (
-            <h1 className="text-xl font-extrabold tracking-tight">
-              <span className="text-primary">Managed</span>
-              <span className="text-sidebar-foreground">Dentista</span>
+            <h1 className="font-display text-xl font-extrabold tracking-tight text-sidebar-foreground">
+              Brasa
             </h1>
           )}
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">Painel</p>
@@ -162,9 +161,8 @@ export function AppShell({ children }: { children: ReactNode }) {
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="h-7 max-w-[140px] object-contain" />
         ) : (
-          <h1 className="text-base font-extrabold tracking-tight">
-            <span className="text-primary">Managed</span>
-            <span className="text-sidebar-foreground">Dentista</span>
+          <h1 className="font-display text-base font-extrabold tracking-tight text-sidebar-foreground">
+            Brasa
           </h1>
         )}
         <button
@@ -176,7 +174,9 @@ export function AppShell({ children }: { children: ReactNode }) {
         </button>
       </header>
 
-      <main className="flex-1 overflow-x-hidden pt-14 pb-16 lg:pt-0 lg:pb-0">{children}</main>
+      <main className="flex-1 overflow-x-hidden pt-14 pb-16 lg:pt-0 lg:pb-0 lg:h-screen lg:overflow-y-auto">
+        {children}
+      </main>
 
       {/* Navegação inferior fixa no celular/tablet */}
       <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch bg-sidebar border-t border-sidebar-border">

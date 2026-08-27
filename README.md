@@ -1,6 +1,6 @@
-# ManagedDentista — CRM Rede Otto
+# Brasa — CRM comercial via WhatsApp
 
-Painel administrativo (CRM/funil comercial) desenvolvido sob medida para a clínica odontológica **Rede Otto**, como parte do plano VMP (Venda Mais com Processo). Cobre captação de leads, funil de vendas (Kanban), agenda, financeiro, estoque e estatísticas.
+Painel administrativo (CRM/funil comercial) com o princípio de nunca deixar um lead esfriar sem resposta. Nasceu sob medida para a clínica odontológica **Rede Otto** (projeto VMP — Venda Mais com Processo) e está em reforma de identidade/UX (V5.0) para virar produto white-label. Cobre captação de leads, funil de vendas (Kanban), agenda, financeiro, estoque e estatísticas.
 
 ## Stack
 
