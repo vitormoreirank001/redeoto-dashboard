@@ -30,12 +30,15 @@ import {
   TableHead,
   TableCell,
 } from "@/components/ui/table";
+import { PageContainer } from "@/components/page-container";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CHART_COLORS, SERIES_COLORS } from "@/lib/chart-colors";
 
 export const Route = createFileRoute("/_authenticated/estatisticas")({
   component: StatsPage,
 });
 
-type Range = "today" | "7d" | "30d" | "month";
+type Range = "today" | "7d" | "30d" | "month" | "custom";
 
 function rangeStart(r: Range): Date {
   const d = new Date();
@@ -56,6 +59,8 @@ type TxSortKey = "name" | "service" | "amount" | "date";
 
 function StatsPage() {
   const [range, setRange] = useState<Range>("30d");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [txSearch, setTxSearch] = useState("");
   const [txSort, setTxSort] = useState<{ key: TxSortKey; dir: "asc" | "desc" }>({
     key: "date",
@@ -76,22 +81,34 @@ function StatsPage() {
     },
   });
 
-  const start = rangeStart(range);
+  // "Personalizado" pede data E hora (datetime-local) — mais fino que o
+  // filtro por dia do CRM. Fora do custom, start/end continuam exatamente
+  // como antes (start do preset, end = agora), então os presets existentes
+  // não mudam de comportamento.
+  const start =
+    range === "custom"
+      ? customFrom
+        ? new Date(customFrom)
+        : rangeStart("today")
+      : rangeStart(range);
+  const end = range === "custom" ? (customTo ? new Date(customTo) : new Date()) : new Date();
   const startDay = toLocalISO(start);
+  const endDay = toLocalISO(end);
 
   // Captação (funil, leads/dia): leads que ENTRARAM no período.
-  const leads = (data?.leads ?? []).filter((l: any) => new Date(l.entry_date) >= start);
+  const leads = (data?.leads ?? []).filter(
+    (l: any) => new Date(l.entry_date) >= start && new Date(l.entry_date) <= end,
+  );
   const entryDay = (l: any) => l.entry_date.slice(0, 10);
 
   // Vendas: leads que FECHARAM no período, independente de quando entraram.
   // Um lead de junho que fechou em julho é venda de julho e precisa aparecer aqui.
   const salesInRange = (data?.leads ?? []).filter(
-    (l: any) => l.stage === "fechado" && saleDay(l) >= startDay,
+    (l: any) => l.stage === "fechado" && saleDay(l) >= startDay && saleDay(l) <= endDay,
   );
 
   const series = useMemo(() => {
     const days: Record<string, { date: string; leads: number; agend: number; vendas: number }> = {};
-    const end = new Date();
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const k = toLocalISO(d);
       days[k] = { date: k, leads: 0, agend: 0, vendas: 0 };
@@ -110,7 +127,7 @@ function StatsPage() {
       ...d,
       label: new Date(d.date).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" }),
     }));
-  }, [leads, salesInRange, start]);
+  }, [leads, salesInRange, start, end]);
 
   // Funnel
   const total = leads.length;
@@ -123,9 +140,14 @@ function StatsPage() {
     (l: any) =>
       l.appointment_date || ["agendado", "orcamento", "followup", "fechado"].includes(l.stage),
   ).length;
-  const avaliacao = leads.filter((l: any) => l.checklist?.avaliacao_realizada).length;
-  const orcamento = leads.filter(
-    (l: any) => l.checklist?.orcamento_apresentado || ["orcamento", "fechado"].includes(l.stage),
+  // Avaliação e orçamento viraram uma etapa só do funil — na prática quase
+  // sempre andam juntos (avalia pra poder orçar), então dois passos quase
+  // idênticos só adicionavam ruído. Conta a união (qualquer um dos sinais).
+  const avaliacaoOrcamento = leads.filter(
+    (l: any) =>
+      l.checklist?.avaliacao_realizada ||
+      l.checklist?.orcamento_apresentado ||
+      ["orcamento", "fechado"].includes(l.stage),
   ).length;
   // Venda usa o mesmo critério de saleDay (fechamento) do resto da tela — não
   // entry_date. Senão um lead que entrou fora do período mas fechou dentro dele
@@ -136,8 +158,7 @@ function StatsPage() {
     { name: "Leads", value: total },
     { name: "Contato", value: contato },
     { name: "Agendado", value: agendado },
-    { name: "Avaliação", value: avaliacao },
-    { name: "Orçamento", value: orcamento },
+    { name: "Avaliação/Orçamento", value: avaliacaoOrcamento },
     { name: "Venda", value: venda },
   ];
 
@@ -166,10 +187,10 @@ function StatsPage() {
   // Transações: leads com valor em jogo (fechado/perdido/orçamento/follow-up),
   // linha a linha, dentro do mesmo período selecionado no topo da página.
   const TX_STATUS: Record<string, { label: string; cls: string }> = {
-    fechado: { label: "Concluído", cls: "bg-success/15 text-[#16A34A]" },
+    fechado: { label: "Concluído", cls: "bg-success/15 text-success" },
     perdido: { label: "Perdido", cls: "bg-destructive/15 text-destructive" },
-    orcamento: { label: "Pendente", cls: "bg-warning/15 text-[#D97706]" },
-    followup: { label: "Pendente", cls: "bg-warning/15 text-[#D97706]" },
+    orcamento: { label: "Pendente", cls: "bg-warning/15 text-warning" },
+    followup: { label: "Pendente", cls: "bg-warning/15 text-warning" },
   };
   const transactions = (data?.leads ?? [])
     .filter((l: any) => Number(l.budget_amount) > 0 && TX_STATUS[l.stage])
@@ -226,7 +247,7 @@ function StatsPage() {
   (data?.leads ?? []).forEach((l: any) => {
     (l.calls ?? []).forEach((c: { at: string; answered: boolean }) => {
       const k = c.at.slice(0, 10);
-      if (k < toLocalISO(start)) return;
+      if (k < startDay || k > endDay) return;
       if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
       callsByDay[k].calls_made += 1;
       if (c.answered) callsByDay[k].calls_answered += 1;
@@ -240,65 +261,94 @@ function StatsPage() {
       atendidas: c.calls_answered,
     }));
 
-  const tickStyle = { fill: "#64748B", fontSize: 11 };
+  const tickStyle = { fill: CHART_COLORS.axisText, fontSize: 11 };
   const tooltipStyle = {
-    backgroundColor: "#FFFFFF",
-    border: "1px solid #E2E8F0",
+    backgroundColor: CHART_COLORS.tooltipBg,
+    border: `1px solid ${CHART_COLORS.tooltipBorder}`,
     borderRadius: 8,
-    color: "#0F172A",
+    color: CHART_COLORS.tooltipText,
   };
 
   // Paleta categórica fixa do app (--chart-1..5) — ordem fixa, nunca cíclica.
-  const SVC_COLORS = ["#1B4FD8", "#64748B", "#16A34A", "#D97706", "#7C3AED"];
+  const SVC_COLORS = SERIES_COLORS;
 
   return (
-    <div className="p-4 lg:p-6 space-y-4 max-w-[1600px] mx-auto">
+    <PageContainer className="space-y-4">
       <header className="flex items-center justify-between flex-wrap gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
-        <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
-          {(["today", "7d", "30d", "month"] as Range[]).map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={cn(
-                "px-3 py-1.5 text-xs rounded-md font-medium transition-colors",
-                range === r
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {r === "today"
-                ? "Hoje"
-                : r === "7d"
-                  ? "7 dias"
-                  : r === "30d"
-                    ? "30 dias"
-                    : "Este mês"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
+            {(["today", "7d", "30d", "month", "custom"] as Range[]).map((r) => (
+              <button
+                key={r}
+                onClick={() => setRange(r)}
+                className={cn(
+                  "px-3 py-1.5 text-xs rounded-md font-medium transition-colors",
+                  range === r
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground",
+                )}
+              >
+                {r === "today"
+                  ? "Hoje"
+                  : r === "7d"
+                    ? "7 dias"
+                    : r === "30d"
+                      ? "30 dias"
+                      : r === "month"
+                        ? "Este mês"
+                        : "Personalizado"}
+              </button>
+            ))}
+          </div>
+          {range === "custom" && (
+            <div className="flex items-center gap-1.5">
+              <Input
+                type="datetime-local"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="h-9 w-auto text-xs"
+                aria-label="Data e hora inicial"
+              />
+              <span className="text-xs text-muted-foreground">até</span>
+              <Input
+                type="datetime-local"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="h-9 w-auto text-xs"
+                aria-label="Data e hora final"
+              />
+            </div>
+          )}
         </div>
       </header>
 
       <Card title="Tendências">
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={series}>
-            <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+            <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
             <XAxis dataKey="label" tick={tickStyle} />
             <YAxis tick={tickStyle} />
             <Tooltip contentStyle={tooltipStyle} />
             <Legend wrapperStyle={{ fontSize: 12 }} />
-            <Line type="monotone" dataKey="leads" stroke="#94A3B8" strokeWidth={2} name="Leads" />
+            <Line
+              type="monotone"
+              dataKey="leads"
+              stroke={CHART_COLORS.frio}
+              strokeWidth={2}
+              name="Leads"
+            />
             <Line
               type="monotone"
               dataKey="agend"
-              stroke="#0EA5E9"
+              stroke={CHART_COLORS.morno}
               strokeWidth={2}
               name="Agendamentos"
             />
             <Line
               type="monotone"
               dataKey="vendas"
-              stroke="#1B4FD8"
+              stroke={CHART_COLORS.ember}
               strokeWidth={2.5}
               name="Vendas"
             />
@@ -314,7 +364,7 @@ function StatsPage() {
             const width = total > 0 ? Math.min(100, Math.max(15, (f.value / total) * 100)) : 15;
             return (
               <div key={f.name} className="flex items-center gap-4">
-                <div className="w-24 text-sm text-muted-foreground">{f.name}</div>
+                <div className="w-32 shrink-0 text-sm text-muted-foreground">{f.name}</div>
                 <div className="flex-1 h-10 bg-secondary rounded-md overflow-hidden relative">
                   <div
                     className="h-full bg-gradient-to-r from-primary to-primary/70 flex items-center px-3"
@@ -358,13 +408,13 @@ function StatsPage() {
         <Card title="Desempenho Comercial — Ligações">
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={callsData}>
-              <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
+              <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
               <XAxis dataKey="label" tick={tickStyle} />
               <YAxis tick={tickStyle} />
               <Tooltip contentStyle={tooltipStyle} />
               <Legend wrapperStyle={{ fontSize: 12 }} />
-              <Bar dataKey="feitas" fill="#94A3B8" name="Feitas" />
-              <Bar dataKey="atendidas" fill="#1B4FD8" name="Atendidas" />
+              <Bar dataKey="feitas" fill={CHART_COLORS.frio} name="Feitas" />
+              <Bar dataKey="atendidas" fill={CHART_COLORS.ember} name="Atendidas" />
             </BarChart>
           </ResponsiveContainer>
         </Card>
@@ -390,7 +440,12 @@ function StatsPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <SortableHead label="Cliente" sortKey="name" current={txSort} onSort={toggleTxSort} />
+                <SortableHead
+                  label="Cliente"
+                  sortKey="name"
+                  current={txSort}
+                  onSort={toggleTxSort}
+                />
                 <SortableHead
                   label="Serviço"
                   sortKey="service"
@@ -411,8 +466,8 @@ function StatsPage() {
             <TableBody>
               {sortedTransactions.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                    Nenhuma transação neste período.
+                  <TableCell colSpan={5}>
+                    <EmptyState message="Nenhuma transação neste período — tente outro filtro de data." />
                   </TableCell>
                 </TableRow>
               )}
@@ -432,10 +487,7 @@ function StatsPage() {
                   </TableCell>
                   <TableCell>
                     <span
-                      className={cn(
-                        "text-xs px-2 py-0.5 rounded-full font-medium",
-                        t.status.cls,
-                      )}
+                      className={cn("text-xs px-2 py-0.5 rounded-full font-medium", t.status.cls)}
                     >
                       {t.status.label}
                     </span>
@@ -446,7 +498,7 @@ function StatsPage() {
           </Table>
         </div>
       </Card>
-    </div>
+    </PageContainer>
   );
 }
 
