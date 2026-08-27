@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -13,12 +13,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { toast } from "sonner";
-import { Trash2, CalendarPlus, MessageCircle } from "lucide-react";
+import { Trash2, CalendarPlus, MessageCircle, Send } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
-import { useSendMessage } from "@/hooks/use-messages";
+import { useMessages, useSendMessage } from "@/hooks/use-messages";
+import { MessageBubble } from "@/components/chat/message-bubble";
+import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/utils";
 
 export interface CustomField {
@@ -27,6 +30,19 @@ export interface CustomField {
   field_type: "text" | "number" | "boolean" | "select";
   options: string[];
   group_name: string;
+}
+
+/** Vira um id estável de aba a partir do nome do grupo (ex: "Plano de saúde" -> "plano_de_saude"). */
+export function slug(text: string) {
+  return (
+    text
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "")
+      .replace(/[^a-z0-9]+/g, "_")
+      .replace(/^_|_$/g, "") || "grupo"
+  );
 }
 
 /** Agrupa campos personalizados por group_name, preservando a ordem de sort_order. */
@@ -129,18 +145,79 @@ const CHECKLIST = [
   { key: "pediu_remarcacao", label: "Pediu para remarcar" },
 ];
 
+/**
+ * Conversa do WhatsApp lado a lado com os dados do lead — pedido do Vitor
+ * pra não precisar sair do CRM e ir na tela de Chat só pra ver a conversa.
+ * Reaproveita os mesmos hooks/componente de bolha da tela de Chat.
+ */
+function ChatColumn({ lead }: { lead: Lead }) {
+  const { data: messages = [] } = useMessages(lead.id);
+  const sendMessage = useSendMessage(lead);
+  const [draft, setDraft] = useState("");
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight });
+  }, [messages.length]);
+
+  async function handleSend() {
+    const text = draft.trim();
+    if (!text) return;
+    setDraft("");
+    try {
+      await sendMessage.mutateAsync(text);
+    } catch (err) {
+      setDraft(text);
+      toast.error(err instanceof Error ? err.message : "Falha ao enviar mensagem");
+    }
+  }
+
+  return (
+    <div className="w-[340px] shrink-0 border-l border-border flex flex-col bg-secondary/20">
+      <div className="p-3 border-b border-border shrink-0">
+        <p className="text-sm font-semibold truncate">{lead.name}</p>
+        <p className="text-xs text-muted-foreground truncate">{lead.phone}</p>
+      </div>
+      <div ref={scrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
+        {messages.length === 0 && (
+          <EmptyState message="Nenhuma mensagem ainda nesta conversa." />
+        )}
+        {messages.map((m) => (
+          <MessageBubble key={m.id} message={m} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2 p-3 border-t border-border shrink-0">
+        <Input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          placeholder="Escreva uma mensagem..."
+          onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), handleSend())}
+          className="flex-1"
+        />
+        <Button size="icon" onClick={handleSend} disabled={!draft.trim() || sendMessage.isPending}>
+          <Send className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export function LeadModal({
   lead,
   initial,
   onClose,
   onSaved,
+  showChat = true,
 }: {
   lead: Lead | null;
   initial?: Partial<Lead>;
   onClose: () => void;
   onSaved: () => void;
+  /** false quando o modal já abre de dentro do Chat (a conversa já está visível ao lado). */
+  showChat?: boolean;
 }) {
   const isNew = !lead;
+  const canChat = !isNew && showChat && !!lead?.phone_e164;
   const { isAdmin } = useUserRole();
   const reminderMutation = useSendMessage(lead);
   const qc = useQueryClient();
@@ -342,7 +419,18 @@ export function LeadModal({
 
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-card border-border">
+      <DialogContent
+        className={cn(
+          "bg-card border-border p-0",
+          canChat ? "max-w-5xl h-[85vh] overflow-hidden flex" : "max-w-3xl",
+        )}
+      >
+      <div
+        className={cn(
+          "min-w-0 p-6",
+          canChat ? "flex-1 overflow-y-auto" : "w-full max-h-[90vh] overflow-y-auto",
+        )}
+      >
         <DialogHeader>
           <DialogTitle className="text-xl">
             {isNew ? "Novo Lead" : form.name || "Editar Lead"}
@@ -354,7 +442,7 @@ export function LeadModal({
           form.stage !== "fechado" &&
           form.stage !== "perdido" && (
             <div className="rounded-lg border border-warning/40 bg-warning/5 p-3">
-              <div className="flex items-center gap-2 text-sm font-medium text-[#D97706]">
+              <div className="flex items-center gap-2 text-sm font-medium text-warning">
                 <CalendarPlus className="h-4 w-4" /> Sem agendamento marcado
               </div>
               <div className="flex flex-wrap items-end gap-2 mt-2">
@@ -374,7 +462,7 @@ export function LeadModal({
         {!isNew && form.appointment_date && (
           <div className="rounded-lg border border-success/40 bg-success/5 p-3">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <div className="flex items-center gap-2 text-sm font-medium text-[#16A34A]">
+              <div className="flex items-center gap-2 text-sm font-medium text-success">
                 <MessageCircle className="h-4 w-4" /> Lembrete —{" "}
                 {formatApptForMessage(form.appointment_date)}
               </div>
@@ -386,7 +474,7 @@ export function LeadModal({
                     className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors",
                       lead?.confirmation_status === "confirmado"
-                        ? "bg-success/15 text-[#16A34A]"
+                        ? "bg-success/15 text-success"
                         : "bg-muted text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -398,7 +486,7 @@ export function LeadModal({
                     className={cn(
                       "text-[10px] px-1.5 py-0.5 rounded font-medium transition-colors",
                       lead?.confirmation_status === "remarcar"
-                        ? "bg-warning/15 text-[#D97706]"
+                        ? "bg-warning/15 text-warning"
                         : "bg-muted text-muted-foreground hover:text-foreground",
                     )}
                   >
@@ -432,7 +520,19 @@ export function LeadModal({
           </div>
         )}
 
-        <div className="mt-2 space-y-5">
+        <Tabs defaultValue="principal" className="mt-2">
+          <TabsList className="w-full flex-wrap h-auto justify-start gap-1 bg-transparent p-0">
+            <TabsTrigger value="principal">Principal</TabsTrigger>
+            {groupCustomFields(customFields).map(([groupName]) => (
+              <TabsTrigger key={groupName} value={slug(groupName)}>
+                {groupName}
+              </TabsTrigger>
+            ))}
+            <TabsTrigger value="ligacoes">Ligações</TabsTrigger>
+            <TabsTrigger value="notas">Notas</TabsTrigger>
+          </TabsList>
+
+        <TabsContent value="principal" className="mt-4 space-y-5">
           <div>
             <h4 className="text-sm font-semibold mb-3">Contato</h4>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -563,10 +663,27 @@ export function LeadModal({
               </Field>
             </div>
           </div>
-        </div>
 
-        <div className="mt-6">
-          <h4 className="text-sm font-semibold mb-3">Ligações</h4>
+          <div>
+            <h4 className="text-sm font-semibold mb-3">Checklist de etapas</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {CHECKLIST.map((c) => (
+                <div key={c.key} className="flex items-center gap-2">
+                  <Checkbox
+                    id={c.key}
+                    checked={!!form.checklist?.[c.key]}
+                    onCheckedChange={(v) => toggleCheck(c.key, !!v)}
+                  />
+                  <Label htmlFor={c.key} className="text-sm cursor-pointer">
+                    {c.label}
+                  </Label>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="ligacoes" className="mt-4">
           <div className="flex flex-wrap items-end gap-2">
             <Field label="Status">
               <Select
@@ -606,7 +723,7 @@ export function LeadModal({
                   <span
                     className={
                       c.answered
-                        ? "px-2 py-0.5 rounded-full text-xs font-medium bg-success/15 text-[#16A34A]"
+                        ? "px-2 py-0.5 rounded-full text-xs font-medium bg-success/15 text-success"
                         : "px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/15 text-destructive"
                     }
                   >
@@ -626,11 +743,10 @@ export function LeadModal({
               </div>
             ))}
           </div>
-        </div>
+        </TabsContent>
 
         {groupCustomFields(customFields).map(([groupName, fields]) => (
-          <div key={groupName} className="mt-6">
-            <h4 className="text-sm font-semibold mb-3">{groupName}</h4>
+          <TabsContent key={groupName} value={slug(groupName)} className="mt-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {fields.map((cf) => (
                 <Field key={cf.key} label={cf.label}>
@@ -676,29 +792,10 @@ export function LeadModal({
                 </Field>
               ))}
             </div>
-          </div>
+          </TabsContent>
         ))}
 
-        <div className="mt-6">
-          <h4 className="text-sm font-semibold mb-3">Checklist de etapas</h4>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-            {CHECKLIST.map((c) => (
-              <div key={c.key} className="flex items-center gap-2">
-                <Checkbox
-                  id={c.key}
-                  checked={!!form.checklist?.[c.key]}
-                  onCheckedChange={(v) => toggleCheck(c.key, !!v)}
-                />
-                <Label htmlFor={c.key} className="text-sm cursor-pointer">
-                  {c.label}
-                </Label>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="mt-6">
-          <h4 className="text-sm font-semibold mb-3">Histórico / Observações</h4>
+        <TabsContent value="notas" className="mt-4">
           <div className="flex gap-2">
             <Input
               value={newNote}
@@ -726,7 +823,8 @@ export function LeadModal({
             value={form.notes ?? ""}
             onChange={(e) => update("notes", e.target.value)}
           />
-        </div>
+        </TabsContent>
+        </Tabs>
 
         <div className="flex items-center justify-between mt-6 pt-4 border-t border-border">
           {!isNew && isAdmin ? (
@@ -747,6 +845,8 @@ export function LeadModal({
             <Button onClick={save}>Salvar</Button>
           </div>
         </div>
+      </div>
+      {canChat && <ChatColumn lead={lead!} />}
       </DialogContent>
     </Dialog>
   );
