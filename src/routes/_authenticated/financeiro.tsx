@@ -17,7 +17,6 @@ import {
   Trash2,
   Wallet,
   TrendingUp,
-  TrendingDown,
   ShieldAlert,
   DollarSign,
   Receipt,
@@ -35,6 +34,10 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUserRole } from "@/hooks/use-user-role";
+import { PageContainer } from "@/components/page-container";
+import { Stat } from "@/components/ui/stat";
+import { EmptyState } from "@/components/ui/empty-state";
+import { CHART_COLORS } from "@/lib/chart-colors";
 import {
   ResponsiveContainer,
   AreaChart,
@@ -67,15 +70,15 @@ function FinanceiroPage() {
   if (isLoading) return null;
   if (!isAdmin) {
     return (
-      <div className="p-4 lg:p-6 max-w-5xl mx-auto">
-        <div className="bg-card border border-border rounded-xl shadow-sm p-8 text-center">
+      <PageContainer>
+        <div className="bg-card border border-border rounded-xl shadow-sm p-8 text-center max-w-md mx-auto">
           <ShieldAlert className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <h1 className="text-lg font-semibold">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Apenas administradores podem acessar o Financeiro.
           </p>
         </div>
-      </div>
+      </PageContainer>
     );
   }
   return <FinanceiroContent />;
@@ -184,7 +187,7 @@ function FinanceiroContent() {
   const margemChange = current && previous ? current.margem - previous.margem : null;
 
   return (
-    <div className="p-4 lg:p-6 space-y-5 max-w-5xl mx-auto">
+    <PageContainer className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">Custos e resultado mensal (DRE)</p>
@@ -192,28 +195,28 @@ function FinanceiroContent() {
 
       {current && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-          <StatCard
+          <Stat
             title="Receita"
             icon={DollarSign}
             value={formatBRL(current.receita)}
             change={receitaChange}
             goodWhenUp
           />
-          <StatCard
+          <Stat
             title="Custo"
             icon={Receipt}
             value={formatBRL(current.custo)}
             change={custoChange}
             goodWhenUp={false}
           />
-          <StatCard
+          <Stat
             title="Lucro"
             icon={Wallet}
             value={formatBRL(current.lucro)}
             change={lucroChange}
             goodWhenUp
           />
-          <StatCard
+          <Stat
             title="Margem"
             icon={Percent}
             value={`${current.margem.toFixed(0)}%`}
@@ -229,15 +232,15 @@ function FinanceiroContent() {
           <h2 className="text-base font-semibold mb-3">Receita × Custo</h2>
           <ResponsiveContainer width="100%" height={260}>
             <AreaChart data={cashflowData}>
-              <CartesianGrid stroke="#E2E8F0" strokeDasharray="3 3" />
-              <XAxis dataKey="label" tick={{ fill: "#64748B", fontSize: 11 }} />
-              <YAxis tick={{ fill: "#64748B", fontSize: 11 }} />
+              <CartesianGrid stroke={CHART_COLORS.grid} strokeDasharray="3 3" />
+              <XAxis dataKey="label" tick={{ fill: CHART_COLORS.axisText, fontSize: 11 }} />
+              <YAxis tick={{ fill: CHART_COLORS.axisText, fontSize: 11 }} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: "#FFFFFF",
-                  border: "1px solid #E2E8F0",
+                  backgroundColor: CHART_COLORS.tooltipBg,
+                  border: `1px solid ${CHART_COLORS.tooltipBorder}`,
                   borderRadius: 8,
-                  color: "#0F172A",
+                  color: CHART_COLORS.tooltipText,
                 }}
                 formatter={(v: number) => formatBRL(v)}
               />
@@ -246,8 +249,8 @@ function FinanceiroContent() {
                 type="monotone"
                 dataKey="receita"
                 name="Receita"
-                stroke="#1B4FD8"
-                fill="#1B4FD8"
+                stroke={CHART_COLORS.ember}
+                fill={CHART_COLORS.ember}
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
@@ -255,8 +258,8 @@ function FinanceiroContent() {
                 type="monotone"
                 dataKey="custo"
                 name="Custo"
-                stroke="#94A3B8"
-                fill="#94A3B8"
+                stroke={CHART_COLORS.frio}
+                fill={CHART_COLORS.frio}
                 fillOpacity={0.15}
                 strokeWidth={2}
               />
@@ -290,7 +293,7 @@ function FinanceiroContent() {
                 <TableCell
                   className={cn(
                     "text-right font-semibold",
-                    row.lucro >= 0 ? "text-[#16A34A]" : "text-destructive",
+                    row.lucro >= 0 ? "text-success" : "text-destructive",
                   )}
                 >
                   {formatBRL(row.lucro)}
@@ -302,8 +305,8 @@ function FinanceiroContent() {
             ))}
             {!dre.length && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                  Sem dados ainda.
+                <TableCell colSpan={5}>
+                  <EmptyState message="Sem dados ainda — feche uma venda ou lance um custo pra começar." />
                 </TableCell>
               </TableRow>
             )}
@@ -402,57 +405,17 @@ function FinanceiroContent() {
             ))}
             {!expensesQ.data?.length && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                  Nenhum custo lançado.
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    icon={Receipt}
+                    message="Nenhum custo lançado ainda — use o formulário acima."
+                  />
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </section>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  icon: Icon,
-  value,
-  change,
-  goodWhenUp,
-  changeIsPoints,
-}: {
-  title: string;
-  icon: React.ComponentType<{ className?: string }>;
-  value: string;
-  change: number | null;
-  goodWhenUp: boolean;
-  changeIsPoints?: boolean;
-}) {
-  const isUp = (change ?? 0) >= 0;
-  const isGood = change === null ? null : isUp === goodWhenUp;
-  return (
-    <div className="rounded-xl bg-card border border-border shadow-sm p-5">
-      <div className="flex items-center justify-between mb-3">
-        <p className="text-sm text-muted-foreground">{title}</p>
-        <div className="h-8 w-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
-      <p className="text-2xl font-bold text-foreground">{value}</p>
-      {change !== null && (
-        <p
-          className={cn(
-            "text-xs mt-1.5 flex items-center gap-1",
-            isGood ? "text-[#16A34A]" : "text-destructive",
-          )}
-        >
-          {isUp ? <TrendingUp className="h-3 w-3" /> : <TrendingDown className="h-3 w-3" />}
-          {isUp ? "+" : ""}
-          {change.toFixed(1)}
-          {changeIsPoints ? "pp" : "%"} vs mês anterior
-        </p>
-      )}
-    </div>
+    </PageContainer>
   );
 }

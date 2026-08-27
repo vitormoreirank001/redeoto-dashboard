@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
 import { toLocalISO } from "@/lib/date-ranges";
+import { PageContainer } from "@/components/page-container";
 
 export const Route = createFileRoute("/_authenticated/agendamento")({
   component: AgendamentoPage,
@@ -185,7 +186,7 @@ function AgendamentoPage() {
         : `${MONTHS[anchor.getMonth()]} de ${anchor.getFullYear()}`;
 
   return (
-    <div className="p-4 lg:p-6 space-y-5">
+    <PageContainer bleed className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Agendamento</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">{countLabel}</p>
@@ -289,7 +290,7 @@ function AgendamentoPage() {
                         className={cn(
                           "text-[10px] truncate pl-1.5 pr-1 py-0.5 rounded border-l-2 bg-secondary/60",
                           l.urgent
-                            ? "border-l-[#7C3AED] text-[#7C3AED]"
+                            ? "border-l-purple text-purple"
                             : "border-l-primary text-primary",
                         )}
                       >
@@ -401,6 +402,6 @@ function AgendamentoPage() {
           }}
         />
       )}
-    </div>
+    </PageContainer>
   );
 }

@@ -16,6 +16,8 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { PageContainer } from "@/components/page-container";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const Route = createFileRoute("/_authenticated/estoque")({
   component: EstoquePage,
@@ -50,9 +52,9 @@ function expiryBadge(expiryDate: string | null) {
     };
   }
   if (d <= 4) {
-    return { text: `Vence em ${d} dias`, cls: "bg-warning/15 text-[#D97706]" };
+    return { text: `Vence em ${d} dias`, cls: "bg-warning/15 text-warning" };
   }
-  return { text: `Vence em ${d} dias`, cls: "bg-success/15 text-[#16A34A]" };
+  return { text: `Vence em ${d} dias`, cls: "bg-success/15 text-success" };
 }
 
 function EstoquePage() {
@@ -102,7 +104,7 @@ function EstoquePage() {
   }
 
   return (
-    <div className="p-4 lg:p-6 space-y-5 max-w-5xl mx-auto">
+    <PageContainer className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Estoque</h1>
         <p className="text-muted-foreground mt-0.5 text-sm">Produtos e validade</p>
@@ -211,14 +213,17 @@ function EstoquePage() {
             })}
             {!items.length && (
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-6">
-                  Nenhum produto cadastrado.
+                <TableCell colSpan={5}>
+                  <EmptyState
+                    icon={Package}
+                    message="Nenhum produto ainda — adicione o primeiro item acima."
+                  />
                 </TableCell>
               </TableRow>
             )}
           </TableBody>
         </Table>
       </section>
-    </div>
+    </PageContainer>
   );
 }

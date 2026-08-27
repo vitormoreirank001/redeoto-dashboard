@@ -37,6 +37,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useUserRole } from "@/hooks/use-user-role";
+import { PageContainer } from "@/components/page-container";
+import { EmptyState } from "@/components/ui/empty-state";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   component: SettingsPage,
@@ -64,15 +66,15 @@ function SettingsPage() {
 
   if (!isAdmin) {
     return (
-      <div className="p-4 lg:p-6 max-w-5xl mx-auto">
-        <div className="bg-card border border-border rounded-xl shadow-sm p-8 text-center">
+      <PageContainer>
+        <div className="bg-card border border-border rounded-xl shadow-sm p-8 text-center max-w-md mx-auto">
           <ShieldAlert className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
           <h1 className="text-lg font-semibold">Acesso restrito</h1>
           <p className="text-sm text-muted-foreground mt-1">
             Apenas administradores podem acessar Configurações.
           </p>
         </div>
-      </div>
+      </PageContainer>
     );
   }
 
@@ -334,9 +336,10 @@ function SettingsContent() {
 
   const midiaOptions = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === "midia");
   const origemOptions = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === "origem");
+  const unidadeOptions = (fieldOptionsQ.data ?? []).filter((o: any) => o.field_key === "unidade");
 
   return (
-    <div className="p-4 lg:p-6 space-y-5 max-w-5xl mx-auto">
+    <PageContainer className="space-y-5">
       <header>
         <h1 className="text-2xl font-semibold tracking-tight">Configurações</h1>
       </header>
@@ -371,7 +374,7 @@ function SettingsContent() {
               </Button>
             </Label>
             <p className="text-xs text-muted-foreground mt-1.5">
-              Aparece na sidebar e na tela de login. Sem logo, mostra o texto "ManagedDentista".
+              Aparece na sidebar e na tela de login. Sem logo, mostra o texto "Brasa".
             </p>
           </div>
         </div>
@@ -447,7 +450,7 @@ function SettingsContent() {
 
       <Section title="Origem" icon={<ListPlus className="h-4 w-4 text-primary" />}>
         <p className="text-xs text-muted-foreground mb-3">
-          Como o lead chegou até a clínica (WhatsApp, Formulário, Fluxo de loja...).
+          Como o lead chegou até você (WhatsApp, Formulário, Loja física...).
         </p>
         <OptionList
           fieldKey="origem"
@@ -457,17 +460,29 @@ function SettingsContent() {
         />
       </Section>
 
+      <Section title="Unidades" icon={<ListPlus className="h-4 w-4 text-primary" />}>
+        <p className="text-xs text-muted-foreground mb-3">
+          Unidades/filiais disponíveis pra atribuir um lead (ex: "Redeoto Aerolândia").
+        </p>
+        <OptionList
+          fieldKey="unidade"
+          options={unidadeOptions}
+          onAdd={(v) => addOption("unidade", v)}
+          onRemove={removeOption}
+        />
+      </Section>
+
       <Section
         title="Campos personalizados"
         icon={<SlidersHorizontal className="h-4 w-4 text-primary" />}
       >
         <p className="text-xs text-muted-foreground mb-3">
-          Campos extras exibidos no card do lead, agrupados por assunto (ex: "Convênio", "Histórico
-          médico") — evita virar uma lista única sem organização.
+          Campos extras exibidos no card do lead, agrupados por assunto (ex: "Pagamento", "Detalhes
+          do pedido") — evita virar uma lista única sem organização.
         </p>
         <div className="grid grid-cols-1 md:grid-cols-[1fr_130px_1fr_150px_auto] gap-3 mb-4">
           <Input
-            placeholder="Nome do campo (ex: Plano de saúde)"
+            placeholder="Nome do campo (ex: Forma de pagamento)"
             value={cfLabel}
             onChange={(e) => setCfLabel(e.target.value)}
           />
@@ -489,7 +504,7 @@ function SettingsContent() {
             disabled={cfType !== "select"}
           />
           <Input
-            placeholder="Grupo (ex: Convênio)"
+            placeholder="Grupo (ex: Pagamento)"
             value={cfGroup}
             onChange={(e) => setCfGroup(e.target.value)}
             list="cf-existing-groups"
@@ -504,9 +519,7 @@ function SettingsContent() {
           </Button>
         </div>
         {!customFieldsQ.data?.length ? (
-          <p className="text-center text-muted-foreground py-6 text-sm">
-            Nenhum campo personalizado.
-          </p>
+          <EmptyState message="Nenhum campo personalizado ainda — crie um acima." />
         ) : (
           <div className="space-y-4">
             {existingGroups.map((group) => (
@@ -646,8 +659,8 @@ function SettingsContent() {
             ))}
             {!servicesQ.data?.length && (
               <TableRow>
-                <TableCell colSpan={3} className="text-center text-muted-foreground py-6">
-                  Nenhum serviço cadastrado.
+                <TableCell colSpan={3}>
+                  <EmptyState message="Nenhum serviço cadastrado ainda — adicione um acima." />
                 </TableCell>
               </TableRow>
             )}
@@ -662,7 +675,7 @@ function SettingsContent() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="flex items-center justify-between flex-wrap gap-2">
-              <h3 className="font-semibold text-sm">WhatsApp — Redeoto</h3>
+              <h3 className="font-semibold text-sm">WhatsApp</h3>
               <span
                 className={
                   settingsQ.data?.whatsapp_connected_at
@@ -695,7 +708,7 @@ function SettingsContent() {
           </div>
         </div>
       </Section>
-    </div>
+    </PageContainer>
   );
 }
 
