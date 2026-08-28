@@ -150,7 +150,7 @@ const CHECKLIST = [
  * pra não precisar sair do CRM e ir na tela de Chat só pra ver a conversa.
  * Reaproveita os mesmos hooks/componente de bolha da tela de Chat.
  */
-function ChatColumn({ lead }: { lead: Lead }) {
+export function ChatColumn({ lead }: { lead: Lead }) {
   const { data: messages = [] } = useMessages(lead.id);
   const sendMessage = useSendMessage(lead);
   const [draft, setDraft] = useState("");

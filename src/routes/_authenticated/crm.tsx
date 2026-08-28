@@ -28,6 +28,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { Plus, AlertTriangle, Search, SlidersHorizontal, X } from "lucide-react";
 import { LeadModal } from "@/components/lead-modal";
+import { LeadDetailDialog } from "@/components/lead-detail-dialog";
 import { toast } from "sonner";
 import {
   formatBRL,
@@ -111,7 +112,7 @@ function CRMPage() {
   const qc = useQueryClient();
   const { lead: deepLinkedLeadId } = Route.useSearch();
   const navigate = useNavigate({ from: Route.fullPath });
-  const [openLead, setOpenLead] = useState<Lead | null>(null);
+  const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -129,6 +130,13 @@ function CRMPage() {
   const [filtersOpen, setFiltersOpen] = useState(false);
 
   const { data: leads = [] } = useLeads();
+  // Deriva do id em vez de guardar o objeto Lead direto — sem isso, o painel
+  // aberto ficava com uma foto congelada do lead no instante do clique, sem
+  // refletir os saves inline (mesmo padrão já usado pro `selected` do Chat).
+  const openLead = useMemo(
+    () => leads.find((l) => l.id === openLeadId) ?? null,
+    [leads, openLeadId],
+  );
 
   // Serviço é texto livre — o filtro lista o que a equipe já digitou, em vez
   // de opções fixas de um único nicho (implante/aparelho não fazem sentido
@@ -147,7 +155,7 @@ function CRMPage() {
     if (!deepLinkedLeadId || leads.length === 0) return;
     const found = leads.find((l) => l.id === deepLinkedLeadId);
     if (found) {
-      setOpenLead(found);
+      setOpenLeadId(found.id);
       navigate({ search: {}, replace: true });
     }
   }, [deepLinkedLeadId, leads, navigate]);
@@ -533,7 +541,14 @@ function CRMPage() {
           <div className="flex gap-4 h-full min-w-max pb-2">
             {COLUMNS.map((col) => {
               const items = filteredLeads.filter((l) => l.stage === col.id);
-              return <KanbanColumn key={col.id} col={col} items={items} onOpen={setOpenLead} />;
+              return (
+                <KanbanColumn
+                  key={col.id}
+                  col={col}
+                  items={items}
+                  onOpen={(lead) => setOpenLeadId(lead.id)}
+                />
+              );
             })}
           </div>
         </div>
@@ -546,19 +561,18 @@ function CRMPage() {
         </DragOverlay>
       </DndContext>
 
-      {(openLead || creating) && (
+      {creating && (
         <LeadModal
-          lead={openLead}
-          onClose={() => {
-            setOpenLead(null);
-            setCreating(false);
-          }}
+          lead={null}
+          onClose={() => setCreating(false)}
           onSaved={() => {
             toast.success("Lead salvo");
             qc.invalidateQueries({ queryKey: ["leads"] });
           }}
         />
       )}
+
+      {openLead && <LeadDetailDialog lead={openLead} onClose={() => setOpenLeadId(null)} />}
     </PageContainer>
   );
 }
