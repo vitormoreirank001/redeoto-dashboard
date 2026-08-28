@@ -108,7 +108,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <img src={logoUrl} alt="Logo" className="h-9 max-w-[160px] object-contain" />
           ) : (
             <h1 className="font-display text-xl font-extrabold tracking-tight text-sidebar-foreground">
-              Brasa
+              VCP Sistema
             </h1>
           )}
           <p className="text-[11px] uppercase tracking-widest text-muted-foreground mt-1">Painel</p>
@@ -162,7 +162,7 @@ export function AppShell({ children }: { children: ReactNode }) {
           <img src={logoUrl} alt="Logo" className="h-7 max-w-[140px] object-contain" />
         ) : (
           <h1 className="font-display text-base font-extrabold tracking-tight text-sidebar-foreground">
-            Brasa
+            VCP Sistema
           </h1>
         )}
         <button

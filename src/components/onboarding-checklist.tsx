@@ -70,7 +70,7 @@ export function OnboardingChecklist() {
       >
         <X className="h-4 w-4" />
       </button>
-      <h2 className="text-sm font-semibold mb-1">Termine de configurar o Brasa</h2>
+      <h2 className="text-sm font-semibold mb-1">Termine de configurar o VCP Sistema</h2>
       <p className="text-xs text-muted-foreground mb-3">
         Poucos passos antes de colocar sua equipe pra trabalhar por aqui.
       </p>

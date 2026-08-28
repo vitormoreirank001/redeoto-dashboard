@@ -70,10 +70,11 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Brasa — Painel Comercial" },
+      { title: "VCP Sistema — Painel Comercial" },
       {
         name: "description",
-        content: "Brasa: funil comercial e atendimento via WhatsApp que não deixa nenhum lead esfriar.",
+        content:
+          "VCP Sistema: funil comercial e atendimento via WhatsApp que não deixa nenhum lead esfriar.",
       },
     ],
     links: [

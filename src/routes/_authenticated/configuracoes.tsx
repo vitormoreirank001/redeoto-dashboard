@@ -374,7 +374,7 @@ function SettingsContent() {
               </Button>
             </Label>
             <p className="text-xs text-muted-foreground mt-1.5">
-              Aparece na sidebar e na tela de login. Sem logo, mostra o texto "Brasa".
+              Aparece na sidebar e na tela de login. Sem logo, mostra o texto "VCP Sistema".
             </p>
           </div>
         </div>
