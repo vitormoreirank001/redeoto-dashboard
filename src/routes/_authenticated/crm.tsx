@@ -43,6 +43,7 @@ import { isAwaitingReply, leadUrgencyTone } from "@/lib/lead-sla";
 import type { Json } from "@/integrations/supabase/types";
 import { useLeads } from "@/hooks/use-leads";
 import { PageContainer } from "@/components/page-container";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const Route = createFileRoute("/_authenticated/crm")({
   component: CRMPage,
@@ -114,6 +115,12 @@ function CRMPage() {
   const navigate = useNavigate({ from: Route.fullPath });
   const [openLeadId, setOpenLeadId] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  // Board de arrastar-e-soltar não cabe na tela do celular (colunas de 288px
+  // ficam cortadas) — abaixo do breakpoint do sidebar fixo (lg, mesmo corte do
+  // AppShell) troca pro board de chips de etapa + lista vertical em MobileLeadList.
+  // Desktop não muda em nada.
+  const isMobile = useIsMobile(1024);
+  const [mobileStage, setMobileStage] = useState<string>("novo");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [filterMedia, setFilterMedia] = useState(ALL);
@@ -536,30 +543,39 @@ function CRMPage() {
         </div>
       )}
 
-      <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex-1 overflow-x-auto overflow-y-hidden">
-          <div className="flex gap-4 h-full min-w-max pb-2">
-            {COLUMNS.map((col) => {
-              const items = filteredLeads.filter((l) => l.stage === col.id);
-              return (
-                <KanbanColumn
-                  key={col.id}
-                  col={col}
-                  items={items}
-                  onOpen={(lead) => setOpenLeadId(lead.id)}
-                />
-              );
-            })}
-          </div>
-        </div>
-        <DragOverlay>
-          {activeLead && (
-            <div className="w-72 bg-background border border-primary rounded-lg p-3 shadow-lg">
-              <LeadCardBody lead={activeLead} />
+      {isMobile ? (
+        <MobileLeadList
+          leads={filteredLeads}
+          activeStage={mobileStage}
+          onStageChange={setMobileStage}
+          onOpen={(lead) => setOpenLeadId(lead.id)}
+        />
+      ) : (
+        <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+          <div className="flex-1 overflow-x-auto overflow-y-hidden">
+            <div className="flex gap-4 h-full min-w-max pb-2">
+              {COLUMNS.map((col) => {
+                const items = filteredLeads.filter((l) => l.stage === col.id);
+                return (
+                  <KanbanColumn
+                    key={col.id}
+                    col={col}
+                    items={items}
+                    onOpen={(lead) => setOpenLeadId(lead.id)}
+                  />
+                );
+              })}
             </div>
-          )}
-        </DragOverlay>
-      </DndContext>
+          </div>
+          <DragOverlay>
+            {activeLead && (
+              <div className="w-72 bg-background border border-primary rounded-lg p-3 shadow-lg">
+                <LeadCardBody lead={activeLead} />
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      )}
 
       {creating && (
         <LeadModal
@@ -646,6 +662,87 @@ function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void
       )}
     >
       <LeadCardBody lead={lead} />
+    </div>
+  );
+}
+
+/**
+ * Alternativa ao board de arrastar-e-soltar pro celular — 8 colunas de 288px
+ * lado a lado não cabem numa tela de ~380px, sobrava só uma lasca da coluna
+ * seguinte (reportado pelo Vitor com print do CRM no iPhone). Em vez de
+ * arrastar (gesto ruim em tela pequena), escolhe a etapa por chip e move o
+ * lead pelo seletor de etapa que já existe no topo do painel do lead
+ * (lead-panel.tsx) — mesma troca de etapa, sem precisar de drag.
+ */
+function MobileLeadList({
+  leads,
+  activeStage,
+  onStageChange,
+  onOpen,
+}: {
+  leads: Lead[];
+  activeStage: string;
+  onStageChange: (stage: string) => void;
+  onOpen: (lead: Lead) => void;
+}) {
+  const items = leads.filter((l) => l.stage === activeStage);
+  return (
+    <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-0 sm:px-0">
+        {COLUMNS.map((col) => {
+          const count = leads.filter((l) => l.stage === col.id).length;
+          const active = col.id === activeStage;
+          return (
+            <button
+              key={col.id}
+              type="button"
+              onClick={() => onStageChange(col.id)}
+              className={cn(
+                "shrink-0 flex items-center gap-1.5 px-3 h-9 rounded-full text-xs font-medium border transition-colors",
+                active
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "bg-card text-muted-foreground border-border",
+              )}
+            >
+              {col.title}
+              <span
+                className={cn(
+                  "min-w-4 px-1 rounded-full text-[10px] leading-4",
+                  active ? "bg-primary-foreground/20" : "bg-secondary",
+                )}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-y-auto space-y-2 pt-1 pb-4">
+        {items.map((lead) => {
+          const awaitingReply = isAwaitingReply(lead);
+          const tone = leadUrgencyTone(lead);
+          return (
+            <div
+              key={lead.id}
+              onClick={() => onOpen(lead)}
+              className={cn(
+                "relative bg-background border rounded-lg p-3 pl-4 cursor-pointer",
+                "before:absolute before:inset-y-0 before:left-0 before:w-1 before:rounded-l-lg",
+                tone ? TEMPERATURE_BAR[tone] : "before:bg-transparent",
+                awaitingReply ? "border-destructive/60" : "border-border",
+              )}
+            >
+              <LeadCardBody lead={lead} />
+            </div>
+          );
+        })}
+        {items.length === 0 && (
+          <div className="text-center py-10 text-sm text-muted-foreground/60">
+            Sem leads nesta etapa
+          </div>
+        )}
+      </div>
     </div>
   );
 }
