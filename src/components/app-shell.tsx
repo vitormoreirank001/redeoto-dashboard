@@ -101,8 +101,8 @@ export function AppShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex bg-background text-foreground">
-      <aside className="hidden lg:flex w-64 shrink-0 bg-sidebar border-r border-sidebar-border flex-col">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex bg-background text-foreground print:h-auto print:overflow-visible">
+      <aside className="hidden lg:flex w-64 shrink-0 bg-sidebar border-r border-sidebar-border flex-col print:hidden">
         <div className="px-6 py-6 border-b border-sidebar-border">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo" className="h-9 max-w-[160px] object-contain" />
@@ -157,7 +157,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       {/* Topo fixo no celular/tablet — logo + sair, navegação fica na barra inferior */}
-      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-4 bg-sidebar border-b border-sidebar-border">
+      <header className="lg:hidden fixed top-0 left-0 right-0 z-40 h-14 flex items-center justify-between px-4 bg-sidebar border-b border-sidebar-border print:hidden">
         {logoUrl ? (
           <img src={logoUrl} alt="Logo" className="h-7 max-w-[140px] object-contain" />
         ) : (
@@ -174,12 +174,12 @@ export function AppShell({ children }: { children: ReactNode }) {
         </button>
       </header>
 
-      <main className="flex-1 overflow-x-hidden pt-14 pb-16 lg:pt-0 lg:pb-0 lg:h-screen lg:overflow-y-auto">
+      <main className="flex-1 overflow-x-hidden pt-14 pb-16 lg:pt-0 lg:pb-0 lg:h-screen lg:overflow-y-auto print:h-auto print:overflow-visible print:pt-0 print:pb-0">
         {children}
       </main>
 
       {/* Navegação inferior fixa no celular/tablet */}
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch bg-sidebar border-t border-sidebar-border">
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 flex items-stretch bg-sidebar border-t border-sidebar-border print:hidden">
         {visibleNavItems.map((item) => {
           const Icon = item.icon;
           const active = pathname === item.to || pathname.startsWith(item.to + "/");

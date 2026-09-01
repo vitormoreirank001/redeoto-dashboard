@@ -21,7 +21,7 @@ import { formatBRL, saleDay, toLocalISO } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Download, ArrowUpDown } from "lucide-react";
+import { Search, Download, ArrowUpDown, Printer } from "lucide-react";
 import {
   Table,
   TableHeader,
@@ -94,6 +94,19 @@ function StatsPage() {
   const end = range === "custom" ? (customTo ? new Date(customTo) : new Date()) : new Date();
   const startDay = toLocalISO(start);
   const endDay = toLocalISO(end);
+
+  const rangeLabel =
+    range === "today"
+      ? "Hoje"
+      : range === "7d"
+        ? "7 dias"
+        : range === "30d"
+          ? "30 dias"
+          : range === "month"
+            ? "Este mês"
+            : "Personalizado";
+  const fmtDate = (d: Date) =>
+    d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric" });
 
   // Captação (funil, leads/dia): leads que ENTRARAM no período.
   const leads = (data?.leads ?? []).filter(
@@ -275,8 +288,15 @@ function StatsPage() {
   return (
     <PageContainer className="space-y-4">
       <header className="flex items-center justify-between flex-wrap gap-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
-        <div className="flex flex-wrap items-center gap-2">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Estatísticas</h1>
+          {/* Só aparece no papel — sem isso o relatório impresso perde o contexto de
+              qual filtro estava ativo, já que os botões abaixo somem na impressão. */}
+          <p className="hidden print:block text-sm text-muted-foreground mt-0.5">
+            Período: {rangeLabel} ({fmtDate(start)} a {fmtDate(end)})
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 print:hidden">
           <div className="flex gap-1 bg-card border border-border rounded-lg p-1">
             {(["today", "7d", "30d", "month", "custom"] as Range[]).map((r) => (
               <button
@@ -320,6 +340,9 @@ function StatsPage() {
               />
             </div>
           )}
+          <Button variant="outline" size="sm" onClick={() => window.print()}>
+            <Printer className="h-3.5 w-3.5 mr-2" /> Exportar / Imprimir
+          </Button>
         </div>
       </header>
 
@@ -421,7 +444,7 @@ function StatsPage() {
       </div>
 
       <Card title="Transações">
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 print:hidden">
           <div className="relative w-full sm:w-64">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
             <Input
@@ -535,7 +558,7 @@ function SortableHead({
 
 function Card({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="bg-card border border-border rounded-xl shadow-sm p-5">
+    <section className="bg-card border border-border rounded-xl shadow-sm p-5 print:break-inside-avoid print:shadow-none">
       <h2 className="text-sm font-semibold mb-3 text-foreground">{title}</h2>
       {children}
     </section>

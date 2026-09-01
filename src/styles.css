@@ -177,3 +177,12 @@
   font-family: var(--font-mono);
   font-variant-numeric: tabular-nums;
 }
+
+@media print {
+  @page {
+    margin: 12mm;
+  }
+  html, body {
+    background-color: #fff;
+  }
+}
