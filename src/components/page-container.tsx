@@ -17,7 +17,7 @@ export function PageContainer({
   bleed?: boolean;
 }) {
   return (
-    <div className={cn("p-4 lg:p-6", !bleed && "max-w-[1600px] mx-auto", className)}>
+    <div className={cn("p-4 lg:p-6", !bleed && "max-w-[1920px] mx-auto", className)}>
       {children}
     </div>
   );
