@@ -1,20 +1,36 @@
+import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { Check, CheckCheck, Clock, FileText, ImageOff, MapPin } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { Check, CheckCheck, Clock, FileText, ImageOff, Loader2, MapPin } from "lucide-react";
 import type { Message } from "@/hooks/use-messages";
 
+const MEDIA_BUCKET = "whatsapp-media";
+const SIGNED_URL_TTL = 60 * 60;
+
 /**
- * Resolve a chave salva em media_bucket_key para uma URL de fato acessível
- * pelo navegador. O bucket "whatsapp-media" no MinIO NÃO é público (dado de
- * paciente/LGPD) — o certo é uma URL assinada (presigned), gerada sob demanda.
+ * Resolve a chave salva em media_bucket_key para uma URL acessível pelo
+ * navegador. O bucket "whatsapp-media" (Supabase Storage) é privado — dado de
+ * paciente/LGPD — então a URL é assinada sob demanda com a sessão do usuário
+ * (policy de SELECT só para authenticated) e expira em 1h.
  *
- * Ainda não existe o serviço que assina essa URL (isso é trabalho do workflow
- * n8n / de uma Edge Function, ainda não construído — depende das instâncias
- * Uazapi estarem conectadas primeiro). Por enquanto retorna null de propósito,
- * e a bolha mostra um estado "mídia pendente" em vez de tentar carregar um
- * link que não existe.
+ * Quem sobe o arquivo é o workflow n8n "Uazapi -> Redeoto (Recebimento)",
+ * logo depois de gravar a mensagem; por isso a chave pode chegar alguns
+ * segundos depois da mensagem em si.
  */
-function resolveMediaUrl(_bucketKey: string): string | null {
-  return null;
+function useMediaUrl(bucketKey: string | null) {
+  return useQuery({
+    queryKey: ["media-url", bucketKey],
+    queryFn: async () => {
+      const { data, error } = await supabase.storage
+        .from(MEDIA_BUCKET)
+        .createSignedUrl(bucketKey as string, SIGNED_URL_TTL);
+      if (error) throw error;
+      return data.signedUrl;
+    },
+    enabled: !!bucketKey,
+    staleTime: (SIGNED_URL_TTL - 5 * 60) * 1000,
+    retry: 1,
+  });
 }
 
 function formatDuration(seconds: number | null) {
@@ -57,20 +73,24 @@ function StatusTicks({ status }: { status: Message["status"] }) {
   return <Clock className="h-3 w-3" aria-label="Enviando" />;
 }
 
-function MediaPending({ label }: { label: string }) {
+function MediaPending({ label, loading }: { label: string; loading?: boolean }) {
   return (
     <div className="flex items-center gap-2 rounded-lg bg-black/10 px-2.5 py-2 text-xs opacity-80">
-      <ImageOff className="h-3.5 w-3.5 shrink-0" />
-      <span>{label} — envio automático ainda não conectado</span>
+      {loading ? (
+        <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+      ) : (
+        <ImageOff className="h-3.5 w-3.5 shrink-0" />
+      )}
+      <span>{loading ? `${label} — carregando…` : `${label} — arquivo não disponível`}</span>
     </div>
   );
 }
 
 function MessageMedia({ message }: { message: Message }) {
-  const url = message.media_bucket_key ? resolveMediaUrl(message.media_bucket_key) : null;
+  const { data: url, isLoading } = useMediaUrl(message.media_bucket_key);
 
   if (message.message_type === "image") {
-    if (!url) return <MediaPending label="Foto" />;
+    if (!url) return <MediaPending label="Foto" loading={isLoading} />;
     return (
       <img src={url} alt="Imagem enviada" className="max-w-full rounded-lg max-h-64 object-cover" />
     );
@@ -78,17 +98,22 @@ function MessageMedia({ message }: { message: Message }) {
 
   if (message.message_type === "audio") {
     if (!url)
-      return <MediaPending label={`Áudio ${formatDuration(message.media_duration_seconds)}`} />;
+      return (
+        <MediaPending
+          label={`Áudio ${formatDuration(message.media_duration_seconds)}`}
+          loading={isLoading}
+        />
+      );
     return <audio controls preload="none" src={url} className="w-full max-w-[260px] h-9" />;
   }
 
   if (message.message_type === "video") {
-    if (!url) return <MediaPending label="Vídeo" />;
+    if (!url) return <MediaPending label="Vídeo" loading={isLoading} />;
     return <video controls preload="none" src={url} className="max-w-full rounded-lg max-h-64" />;
   }
 
   if (message.message_type === "document") {
-    if (!url) return <MediaPending label="Documento" />;
+    if (!url) return <MediaPending label="Documento" loading={isLoading} />;
     return (
       <a
         href={url}
