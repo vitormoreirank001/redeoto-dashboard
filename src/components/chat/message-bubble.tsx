@@ -104,7 +104,9 @@ function MessageMedia({ message }: { message: Message }) {
           loading={isLoading}
         />
       );
-    return <audio controls preload="none" src={url} className="w-full max-w-[260px] h-9" />;
+    // Largura fixa: o balão encolhe até o conteúdo, e com w-full o player
+    // ficava espremido sem botão de play (balão de mensagem recebida).
+    return <audio controls preload="metadata" src={url} className="w-[260px] max-w-full h-10" />;
   }
 
   if (message.message_type === "video") {
@@ -132,6 +134,16 @@ function MessageMedia({ message }: { message: Message }) {
       <div className="flex items-center gap-2 rounded-lg bg-black/10 px-2.5 py-2 text-xs">
         <MapPin className="h-3.5 w-3.5 shrink-0" />
         Localização compartilhada
+      </div>
+    );
+  }
+
+  // "other" = figurinha, reação, enquete etc. que o n8n não converte — sem
+  // isso o balão aparecia vazio, só com o horário.
+  if (!message.body) {
+    return (
+      <div className="flex items-center gap-2 rounded-lg bg-black/10 px-2.5 py-2 text-xs opacity-80">
+        Mensagem não suportada — veja no WhatsApp
       </div>
     );
   }
