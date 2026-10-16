@@ -23,8 +23,27 @@ export function useMessages(leadId: string | null) {
       return data as Message[];
     },
     enabled: !!leadId,
+    // O n8n grava a mensagem primeiro e só ~3s depois sobe o arquivo e
+    // preenche media_bucket_key. Sem refetch, quem abria a conversa nesse
+    // intervalo ficava com "arquivo não disponível" até recarregar a página.
+    // Enquanto houver mídia recente ainda sem chave, rebusca a cada 3s; fora
+    // isso, a cada 15s (também traz mensagem nova sem precisar recarregar).
+    refetchInterval: (query) => {
+      const msgs = query.state.data as Message[] | undefined;
+      const waitingMedia = msgs?.some(
+        (m) =>
+          m.message_type !== "text" &&
+          m.message_type !== "location" &&
+          m.message_type !== "other" &&
+          !m.media_bucket_key &&
+          Date.now() - new Date(m.created_at).getTime() < MEDIA_UPLOAD_GRACE_MS,
+      );
+      return waitingMedia ? 3_000 : 15_000;
+    },
   });
 }
+
+const MEDIA_UPLOAD_GRACE_MS = 2 * 60 * 1000;
 
 const N8N_SEND_WEBHOOK_URL =
   import.meta.env.VITE_N8N_SEND_WEBHOOK_URL ||
