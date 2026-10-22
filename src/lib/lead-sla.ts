@@ -14,8 +14,12 @@ export interface SlaLead {
  */
 export function isAwaitingReply(lead: SlaLead): boolean {
   if (!lead.last_inbound_at) return false;
-  if (lead.last_outbound_at && lead.last_inbound_at <= lead.last_outbound_at) return false;
-  if (lead.chat_closed_at && lead.last_inbound_at <= lead.chat_closed_at) return false;
+  // Compara como instante, não como texto: se algum valor vier com outro fuso
+  // (ex.: "-03:00" gravado pelo n8n), a ordem alfabética deixa de ser a ordem
+  // do tempo.
+  const inbound = Date.parse(lead.last_inbound_at);
+  if (lead.last_outbound_at && inbound <= Date.parse(lead.last_outbound_at)) return false;
+  if (lead.chat_closed_at && inbound <= Date.parse(lead.chat_closed_at)) return false;
   return true;
 }
 

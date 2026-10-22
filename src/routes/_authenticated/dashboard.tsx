@@ -27,6 +27,7 @@ import {
   greeting,
   monthEndISO,
   monthStartISO,
+  localDay,
   saleDay,
   todayISO,
   weekStartISO,
@@ -51,6 +52,7 @@ import { COLUMNS } from "./crm";
 import type { Lead } from "./crm";
 import { CalendarPlus, MessageCircle } from "lucide-react";
 import { useLeads } from "@/hooks/use-leads";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useUserRole } from "@/hooks/use-user-role";
 import { OnboardingChecklist } from "@/components/onboarding-checklist";
 
@@ -143,7 +145,12 @@ function DashboardPage() {
     });
   }, []);
 
-  const { data: allLeads } = useLeads();
+  // Enquanto os leads não chegam (banco em Oregon, ~1s), os cartões mostravam
+  // "0 sem resposta / tudo em dia" como se fosse real. `loading` troca os
+  // números por placeholder até o primeiro carregamento terminar.
+  const { data: allLeads, isLoading: loading } = useLeads();
+  const num = (v: React.ReactNode) =>
+    loading ? <Skeleton className="h-9 w-24 mt-1 inline-block align-middle" /> : v;
 
   const { data: goalData } = useQuery({
     queryKey: ["monthly_goal", new Date().getFullYear(), new Date().getMonth() + 1],
@@ -184,7 +191,7 @@ function DashboardPage() {
   const me = monthEndISO();
 
   const leads = allLeads ?? [];
-  const entryDay = (l: Lead) => l.entry_date.slice(0, 10);
+  const entryDay = (l: Lead) => localDay(l.entry_date);
 
   const leadsByDate = leads.map((l) => ({ date: entryDay(l) }));
   const apptByDate = leads
@@ -201,7 +208,7 @@ function DashboardPage() {
   const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
 
   const allCalls = leads.flatMap((l) => l.calls ?? []);
-  const callDay = (c: { at: string }) => c.at.slice(0, 10);
+  const callDay = (c: { at: string }) => localDay(c.at);
   const sumCalls = (kind: "made" | "answered", s: string, e: string) =>
     allCalls.filter((c) => callDay(c) >= s && callDay(c) <= e && (kind === "made" || c.answered))
       .length;
@@ -275,7 +282,7 @@ function DashboardPage() {
                   {PERIOD_LABEL[revenuePeriod as Exclude<Period, "custom">] ?? "Personalizado"}
                 </p>
                 <p className="text-4xl font-extrabold text-primary mt-1">
-                  {formatBRL(revenueFiltered)}
+                  {num(formatBRL(revenueFiltered))}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Meta do mês: <span className="text-foreground">{formatBRL(goal)}</span>
@@ -365,10 +372,14 @@ function DashboardPage() {
                 awaitingReplyCount > 0 ? "text-destructive" : "text-foreground",
               )}
             >
-              {awaitingReplyCount}
+              {num(awaitingReplyCount)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {awaitingReplyCount > 0 ? "Aguardando sua resposta — ver no CRM" : "Tudo respondido"}
+              {loading
+                ? "Carregando…"
+                : awaitingReplyCount > 0
+                  ? "Aguardando sua resposta — ver no CRM"
+                  : "Tudo respondido"}
             </p>
           </div>
         </Link>
@@ -397,10 +408,14 @@ function DashboardPage() {
                 apptToday > 0 ? "text-success" : "text-foreground",
               )}
             >
-              {apptToday}
+              {num(apptToday)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              {apptToday > 0 ? "Cliente(s) agendado(s) para hoje" : "Nenhum agendamento para hoje"}
+              {loading
+                ? "Carregando…"
+                : apptToday > 0
+                  ? "Cliente(s) agendado(s) para hoje"
+                  : "Nenhum agendamento para hoje"}
             </p>
           </div>
         </div>
@@ -469,11 +484,17 @@ function DashboardPage() {
                       {row.label}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-mono-data">{row.today}</TableCell>
-                  <TableCell className="text-right font-mono-data">{row.yesterday}</TableCell>
-                  <TableCell className="text-right font-mono-data">{row.week}</TableCell>
+                  <TableCell className="text-right font-mono-data">
+                    {loading ? "—" : row.today}
+                  </TableCell>
+                  <TableCell className="text-right font-mono-data">
+                    {loading ? "—" : row.yesterday}
+                  </TableCell>
+                  <TableCell className="text-right font-mono-data">
+                    {loading ? "—" : row.week}
+                  </TableCell>
                   <TableCell className="text-right font-mono-data font-semibold">
-                    {row.month}
+                    {loading ? "—" : row.month}
                   </TableCell>
                 </TableRow>
               ))}
@@ -499,7 +520,13 @@ function DashboardPage() {
           )}
         </div>
 
-        {actionQueue.length === 0 ? (
+        {loading ? (
+          <div className="space-y-2">
+            {[0, 1, 2].map((i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : actionQueue.length === 0 ? (
           <p className="text-sm text-muted-foreground py-4 text-center">
             Nada pendente — tudo em dia.
           </p>
@@ -518,13 +545,13 @@ function DashboardPage() {
               const showChatButton =
                 !!lead.phone_e164 && (kind === "reminder_upcoming" || kind === "awaiting_reply");
               return (
-                <Link
+                // Card e botão de chat são links irmãos: <a> dentro de <a> é
+                // HTML inválido e dava erro de hidratação no console.
+                <div
                   key={lead.id}
-                  to="/crm"
-                  search={{ lead: lead.id }}
                   className="flex items-center gap-3 p-2.5 rounded-lg border border-transparent hover:border-border hover:bg-secondary/50 transition-colors"
                 >
-                  <div className="min-w-0 flex-1">
+                  <Link to="/crm" search={{ lead: lead.id }} className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium truncate">{lead.name}</span>
                       {stageInfo && (
@@ -539,19 +566,18 @@ function DashboardPage() {
                       )}
                       {detail}
                     </p>
-                  </div>
+                  </Link>
                   {showChatButton && (
                     <Link
                       to="/chat"
                       search={{ lead: lead.id }}
-                      onClick={(e) => e.stopPropagation()}
                       className="shrink-0 h-8 w-8 rounded-lg bg-success/15 text-success flex items-center justify-center hover:bg-success/25 transition-colors"
                       title="Abrir conversa"
                     >
                       <MessageCircle className="h-4 w-4" />
                     </Link>
                   )}
-                </Link>
+                </div>
               );
             })}
             {actionQueue.length > 8 && (

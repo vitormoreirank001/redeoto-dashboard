@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllPages } from "@/lib/fetch-all";
 import { useState, useMemo } from "react";
 import {
   LineChart,
@@ -17,7 +18,7 @@ import {
   CartesianGrid,
   Legend,
 } from "recharts";
-import { formatBRL, saleDay, toLocalISO } from "@/lib/date-ranges";
+import { formatBRL, localDay, saleDay, toLocalISO } from "@/lib/date-ranges";
 import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -72,12 +73,16 @@ function StatsPage() {
     queryFn: async () => {
       // Sem telefone/notas/histórico (PII que esta tela não precisa). "name" entrou
       // de propósito pra tabela de Transações identificar quem é a venda/negociação.
-      const leadsR = await supabase
-        .from("leads")
-        .select(
-          "id,name,entry_date,appointment_date,stage,service,budget_amount,checklist,calls,closed_at,stage_changed_at",
-        );
-      return { leads: leadsR.data ?? [] };
+      const leads = await fetchAllPages((from, to) =>
+        supabase
+          .from("leads")
+          .select(
+            "id,name,entry_date,appointment_date,stage,service,budget_amount,checklist,calls,closed_at,stage_changed_at",
+          )
+          .order("id")
+          .range(from, to),
+      );
+      return { leads };
     },
   });
 
@@ -112,7 +117,7 @@ function StatsPage() {
   const leads = (data?.leads ?? []).filter(
     (l: any) => new Date(l.entry_date) >= start && new Date(l.entry_date) <= end,
   );
-  const entryDay = (l: any) => l.entry_date.slice(0, 10);
+  const entryDay = (l: any) => localDay(l.entry_date);
 
   // Vendas: leads que FECHARAM no período, independente de quando entraram.
   // Um lead de junho que fechou em julho é venda de julho e precisa aparecer aqui.
@@ -212,7 +217,7 @@ function StatsPage() {
       name: l.name as string,
       service: (l.service as string)?.trim() || "—",
       amount: Number(l.budget_amount || 0),
-      date: l.stage === "fechado" ? saleDay(l) : (l.stage_changed_at as string).slice(0, 10),
+      date: l.stage === "fechado" ? saleDay(l) : localDay(l.stage_changed_at as string),
       status: TX_STATUS[l.stage],
     }))
     .filter((t) => t.date >= startDay)
@@ -259,7 +264,7 @@ function StatsPage() {
   const callsByDay: Record<string, { calls_made: number; calls_answered: number }> = {};
   (data?.leads ?? []).forEach((l: any) => {
     (l.calls ?? []).forEach((c: { at: string; answered: boolean }) => {
-      const k = c.at.slice(0, 10);
+      const k = localDay(c.at);
       if (k < startDay || k > endDay) return;
       if (!callsByDay[k]) callsByDay[k] = { calls_made: 0, calls_answered: 0 };
       callsByDay[k].calls_made += 1;

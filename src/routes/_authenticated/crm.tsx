@@ -32,6 +32,7 @@ import { LeadDetailDialog } from "@/components/lead-detail-dialog";
 import { toast } from "sonner";
 import {
   formatBRL,
+  localDay,
   saleDay,
   type DateBasis,
   type Period,
@@ -257,7 +258,7 @@ function CRMPage() {
             ? l.stage === "fechado"
               ? saleDay(l)
               : null
-            : l.entry_date.slice(0, 10);
+            : localDay(l.entry_date);
         if (!day) return false;
         if (from && day < from) return false;
         if (to && day > to) return false;

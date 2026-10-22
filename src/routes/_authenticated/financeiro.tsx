@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllPages } from "@/lib/fetch-all";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -94,22 +95,29 @@ function FinanceiroContent() {
   const expensesQ = useQuery({
     queryKey: ["expenses"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("expenses")
-        .select("*")
-        .order("expense_date", { ascending: false });
-      return data ?? [];
+      return fetchAllPages((from, to) =>
+        supabase
+          .from("expenses")
+          .select("*")
+          .order("expense_date", { ascending: false })
+          .order("id")
+          .range(from, to),
+      );
     },
   });
 
   const leadsQ = useQuery({
     queryKey: ["leads_finance"],
     queryFn: async () => {
-      const { data } = await supabase
-        .from("leads")
-        .select("entry_date,closed_at,budget_amount,stage")
-        .eq("stage", "fechado");
-      return data ?? [];
+      // 425 fechados hoje: passa de 1000 em poucos meses, então já vem paginado.
+      return fetchAllPages((from, to) =>
+        supabase
+          .from("leads")
+          .select("entry_date,closed_at,budget_amount,stage")
+          .eq("stage", "fechado")
+          .order("id")
+          .range(from, to),
+      );
     },
   });
 

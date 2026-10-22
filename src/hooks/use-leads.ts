@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAllPages } from "@/lib/fetch-all";
 import type { Lead } from "@/routes/_authenticated/crm";
 
 /**
@@ -14,13 +15,16 @@ export const LEADS_QUERY_KEY = ["leads"] as const;
 export function useLeads() {
   return useQuery({
     queryKey: LEADS_QUERY_KEY,
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("leads")
-        .select("*")
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      return (data as unknown as Lead[]) ?? [];
-    },
+    // Paginado: um select simples parava em 1000 linhas sem avisar.
+    queryFn: () =>
+      fetchAllPages<Lead>((from, to) =>
+        supabase
+          .from("leads")
+          .select("*")
+          .order("created_at", { ascending: false })
+          .order("id", { ascending: false })
+          .range(from, to)
+          .then(({ data, error }) => ({ data: data as unknown as Lead[] | null, error })),
+      ),
   });
 }

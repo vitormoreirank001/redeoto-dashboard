@@ -14,6 +14,24 @@ export function toLocalISO(d: Date): string {
   return `${y}-${m}-${day}`;
 }
 
+/**
+ * Dia LOCAL (YYYY-MM-DD) de um timestamp do banco.
+ *
+ * `entry_date`, `closed_at`, `stage_changed_at` e `calls[].at` são instantes
+ * em UTC ("2026-10-22T01:30:00+00:00"). Cortar a string em 10 caracteres pega o
+ * dia em UTC: no Brasil (UTC-3), tudo o que acontece depois das 21h caía no dia
+ * seguinte — e uma venda fechada na noite do último dia do mês contava no mês
+ * seguinte. Data pura ("2026-10-22") volta igual.
+ *
+ * NÃO usar em `appointment_date`: o agendamento é gravado com a hora local
+ * marcada como se fosse UTC (10:00 vira "10:00+00:00"), então lá o corte da
+ * string é que dá o dia certo.
+ */
+export function localDay(ts: string): string {
+  if (ts.length <= 10) return ts;
+  return toLocalISO(new Date(ts));
+}
+
 export function todayISO(): string {
   return toLocalISO(new Date());
 }
@@ -53,7 +71,7 @@ export function monthEndISO(): string {
  * Só faz sentido para leads com stage = "fechado".
  */
 export function saleDay(lead: { closed_at?: string | null; entry_date: string }): string {
-  return (lead.closed_at ?? lead.entry_date).slice(0, 10);
+  return localDay(lead.closed_at ?? lead.entry_date);
 }
 
 export function formatBRL(n: number): string {

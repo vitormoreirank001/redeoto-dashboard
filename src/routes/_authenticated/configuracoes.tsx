@@ -39,6 +39,7 @@ import {
 import { useUserRole } from "@/hooks/use-user-role";
 import { PageContainer } from "@/components/page-container";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Lixeira } from "@/components/lixeira";
 
 export const Route = createFileRoute("/_authenticated/configuracoes")({
   component: SettingsPage,
@@ -708,6 +709,8 @@ function SettingsContent() {
           </div>
         </div>
       </Section>
+
+      <Lixeira profiles={usersQ.data ?? []} />
     </PageContainer>
   );
 }
