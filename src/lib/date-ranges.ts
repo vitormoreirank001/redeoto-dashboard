@@ -17,15 +17,12 @@ export function toLocalISO(d: Date): string {
 /**
  * Dia LOCAL (YYYY-MM-DD) de um timestamp do banco.
  *
- * `entry_date`, `closed_at`, `stage_changed_at` e `calls[].at` são instantes
- * em UTC ("2026-10-22T01:30:00+00:00"). Cortar a string em 10 caracteres pega o
- * dia em UTC: no Brasil (UTC-3), tudo o que acontece depois das 21h caía no dia
- * seguinte — e uma venda fechada na noite do último dia do mês contava no mês
- * seguinte. Data pura ("2026-10-22") volta igual.
- *
- * NÃO usar em `appointment_date`: o agendamento é gravado com a hora local
- * marcada como se fosse UTC (10:00 vira "10:00+00:00"), então lá o corte da
- * string é que dá o dia certo.
+ * `entry_date`, `closed_at`, `stage_changed_at`, `appointment_date` e
+ * `calls[].at` são instantes em UTC ("2026-10-22T01:30:00+00:00"). Cortar a
+ * string em 10 caracteres pega o dia em UTC: no Brasil (UTC-3), tudo o que
+ * acontece depois das 21h caía no dia seguinte — e uma venda fechada na noite
+ * do último dia do mês contava no mês seguinte. Data pura ("2026-10-22") volta
+ * igual.
  */
 export function localDay(ts: string): string {
   if (ts.length <= 10) return ts;

@@ -134,7 +134,7 @@ function StatsPage() {
     leads.forEach((l: any) => {
       const k = entryDay(l);
       if (days[k]) days[k].leads++;
-      const apptDay = l.appointment_date?.slice(0, 10);
+      const apptDay = l.appointment_date ? localDay(l.appointment_date) : undefined;
       if (apptDay && days[apptDay]) days[apptDay].agend++;
     });
     salesInRange.forEach((l: any) => {

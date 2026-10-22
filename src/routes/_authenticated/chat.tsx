@@ -78,6 +78,8 @@ function SystemMessage({ at, text }: { at: string; text: string }) {
   );
 }
 
+const LIST_PAGE = 60;
+
 function initials(name: string): string {
   return name
     .trim()
@@ -92,6 +94,11 @@ function ChatPage() {
   const { lead: deepLinkedLeadId } = Route.useSearch();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<ChatFilter>("all");
+  // Lista com ~800 conversas renderizava tudo de uma vez (lento no celular).
+  // Mostra as mais recentes e carrega mais sob demanda; volta ao início a cada
+  // busca/filtro.
+  const [visible, setVisible] = useState(LIST_PAGE);
+  useEffect(() => setVisible(LIST_PAGE), [search, filter]);
   const [selectedId, setSelectedId] = useState<string | null>(deepLinkedLeadId ?? null);
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -214,7 +221,7 @@ function ChatPage() {
       </div>
       <div className="flex-1 overflow-y-auto">
         {sorted.length === 0 && <EmptyState message="Nenhum lead encontrado." />}
-        {sorted.map(({ lead, last }) => (
+        {sorted.slice(0, visible).map(({ lead, last }) => (
           <button
             key={lead.id}
             onClick={() => setSelectedId(lead.id)}
@@ -259,6 +266,14 @@ function ChatPage() {
             {lead.urgent && <span className="h-2 w-2 rounded-full bg-purple shrink-0" />}
           </button>
         ))}
+        {sorted.length > visible && (
+          <button
+            onClick={() => setVisible((v) => v + LIST_PAGE)}
+            className="w-full py-3 text-xs font-medium text-primary hover:bg-secondary/50"
+          >
+            Mostrar mais ({sorted.length - visible} restantes)
+          </button>
+        )}
       </div>
     </>
   );

@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import type { Lead } from "@/routes/_authenticated/crm";
 import { useLeads, LEADS_QUERY_KEY } from "@/hooks/use-leads";
-import { toLocalISO } from "@/lib/date-ranges";
+import { localDay, toLocalISO } from "@/lib/date-ranges";
 import { PageContainer } from "@/components/page-container";
 
 export const Route = createFileRoute("/_authenticated/agendamento")({
@@ -123,7 +123,7 @@ function AgendamentoPage() {
     const map: Record<string, Lead[]> = {};
     agendaLeads.forEach((l) => {
       if (!l.appointment_date) return;
-      const day = l.appointment_date.slice(0, 10);
+      const day = localDay(l.appointment_date);
       (map[day] ??= []).push(l);
     });
     return map;

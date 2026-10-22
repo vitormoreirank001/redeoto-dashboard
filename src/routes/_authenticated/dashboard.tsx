@@ -87,6 +87,27 @@ function formatApptShort(iso: string): string {
 
 const REMINDER_WINDOW_MS = 48 * 60 * 60 * 1000;
 
+/**
+ * "Sem resposta" com mais de 7 dias sai da fila "Contate agora". Antes a fila
+ * era ordenada da mensagem mais antiga para a mais nova, então o topo era
+ * ocupado por conversas de 2 meses atrás (inclusive de leads Fechados/Perdidos)
+ * e quem chamou hoje ficava enterrado entre +200 pendentes. As antigas
+ * continuam contadas no cartão e no filtro "Sem resposta" do CRM.
+ */
+const STALE_REPLY_MS = 7 * 24 * 60 * 60 * 1000;
+
+function isStaleReply(lead: Lead): boolean {
+  return Date.now() - new Date(lead.last_inbound_at!).getTime() > STALE_REPLY_MS;
+}
+
+// Ordem da fila: responder quem está esperando > confirmar quem vem nas
+// próximas 48h > marcar avaliação de quem ainda não tem horário.
+const KIND_RANK: Record<ActionItem["kind"], number> = {
+  awaiting_reply: 0,
+  reminder_upcoming: 1,
+  no_appointment: 2,
+};
+
 interface ActionItem {
   lead: Lead;
   kind: "awaiting_reply" | "no_appointment" | "reminder_upcoming";
@@ -97,11 +118,13 @@ interface ActionItem {
 /** Um motivo por lead, na ordem de urgência: sem resposta > sem agendamento > lembrete próximo. */
 function buildActionItem(lead: Lead): ActionItem | null {
   if (isAwaitingReply(lead)) {
+    if (isStaleReply(lead)) return null;
     return {
       lead,
       kind: "awaiting_reply",
       detail: `Sem resposta há ${elapsedShort(lead.last_inbound_at!)}`,
-      sortKey: new Date(lead.last_inbound_at!).getTime(),
+      // Mais recente primeiro: quem acabou de chamar é quem mais converte.
+      sortKey: -new Date(lead.last_inbound_at!).getTime(),
     };
   }
   if (!lead.appointment_date && lead.stage !== "fechado" && lead.stage !== "perdido") {
@@ -196,7 +219,7 @@ function DashboardPage() {
   const leadsByDate = leads.map((l) => ({ date: entryDay(l) }));
   const apptByDate = leads
     .filter((l) => l.appointment_date)
-    .map((l) => ({ date: l.appointment_date!.slice(0, 10) }));
+    .map((l) => ({ date: localDay(l.appointment_date!) }));
   const evalByDate = leads
     .filter((l) => (l.checklist as Record<string, boolean>)?.avaliacao_realizada)
     .map((l) => ({ date: entryDay(l) }));
@@ -205,7 +228,9 @@ function DashboardPage() {
     .map((l) => ({ date: entryDay(l) }));
   const salesByDate = leads.filter((l) => l.stage === "fechado").map((l) => ({ date: saleDay(l) }));
 
-  const apptToday = leads.filter((l) => l.appointment_date?.slice(0, 10) === t).length;
+  const apptToday = leads.filter(
+    (l) => l.appointment_date && localDay(l.appointment_date) === t,
+  ).length;
 
   const allCalls = leads.flatMap((l) => l.calls ?? []);
   const callDay = (c: { at: string }) => localDay(c.at);
@@ -240,12 +265,14 @@ function DashboardPage() {
   const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
-  const awaitingReplyCount = leads.filter(isAwaitingReply).length;
+  const awaitingAll = leads.filter(isAwaitingReply);
+  const staleReplyCount = awaitingAll.filter(isStaleReply).length;
+  const awaitingReplyCount = awaitingAll.length - staleReplyCount;
 
   const actionQueue = leads
     .map(buildActionItem)
     .filter((x): x is ActionItem => x !== null)
-    .sort((a, b) => a.sortKey - b.sortKey);
+    .sort((a, b) => KIND_RANK[a.kind] - KIND_RANK[b.kind] || a.sortKey - b.sortKey);
 
   return (
     <PageContainer className="space-y-6">
@@ -331,9 +358,11 @@ function DashboardPage() {
               <div className="flex justify-between text-xs text-muted-foreground mb-2">
                 <span>{pct}% atingido</span>
                 <span>
-                  {goal > 0
-                    ? `Faltam ${formatBRL(missing)} para a meta`
-                    : "Defina uma meta em Configurações"}
+                  {goal <= 0
+                    ? "Defina uma meta em Configurações"
+                    : missing > 0
+                      ? `Faltam ${formatBRL(missing)} para a meta`
+                      : `Meta batida! ${formatBRL(revenueFiltered - goal)} acima`}
                 </span>
               </div>
               <Progress value={pct} className="h-3" />
@@ -378,8 +407,13 @@ function DashboardPage() {
               {loading
                 ? "Carregando…"
                 : awaitingReplyCount > 0
-                  ? "Aguardando sua resposta — ver no CRM"
-                  : "Tudo respondido"}
+                  ? "Nos últimos 7 dias — ver no CRM"
+                  : "Tudo respondido nos últimos 7 dias"}
+              {!loading && staleReplyCount > 0 && (
+                <span className="block mt-0.5">
+                  + {staleReplyCount} conversa(s) parada(s) há mais de 7 dias
+                </span>
+              )}
             </p>
           </div>
         </Link>
