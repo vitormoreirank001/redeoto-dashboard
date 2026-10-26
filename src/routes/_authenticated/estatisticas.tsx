@@ -152,11 +152,11 @@ function StatsPage() {
   const contato = leads.filter(
     (l: any) =>
       l.checklist?.primeiro_contato ||
-      ["contato", "agendado", "orcamento", "followup", "fechado"].includes(l.stage),
+      ["contato", "cadencia_1", "agendado", "orcamento", "despedida", "fechado"].includes(l.stage),
   ).length;
   const agendado = leads.filter(
     (l: any) =>
-      l.appointment_date || ["agendado", "orcamento", "followup", "fechado"].includes(l.stage),
+      l.appointment_date || ["agendado", "orcamento", "despedida", "fechado"].includes(l.stage),
   ).length;
   // Avaliação e orçamento viraram uma etapa só do funil — na prática quase
   // sempre andam juntos (avalia pra poder orçar), então dois passos quase
@@ -202,13 +202,14 @@ function StatsPage() {
     svcData.push({ name: "Outros", count: folded.count, revenue: folded.revenue });
   }
 
-  // Transações: leads com valor em jogo (fechado/perdido/orçamento/follow-up),
+  // Transações: leads com valor em jogo (fechado/perdido/orçamento/cadência/despedida),
   // linha a linha, dentro do mesmo período selecionado no topo da página.
   const TX_STATUS: Record<string, { label: string; cls: string }> = {
     fechado: { label: "Concluído", cls: "bg-success/15 text-success" },
     perdido: { label: "Perdido", cls: "bg-destructive/15 text-destructive" },
     orcamento: { label: "Pendente", cls: "bg-warning/15 text-warning" },
-    followup: { label: "Pendente", cls: "bg-warning/15 text-warning" },
+    cadencia_1: { label: "Pendente", cls: "bg-warning/15 text-warning" },
+    despedida: { label: "Pendente", cls: "bg-warning/15 text-warning" },
   };
   const transactions = (data?.leads ?? [])
     .filter((l: any) => Number(l.budget_amount) > 0 && TX_STATUS[l.stage])

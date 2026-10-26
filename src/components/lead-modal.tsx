@@ -8,14 +8,16 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
-import type { Lead } from "@/routes/_authenticated/crm";
+import { ALL_STAGES, FUNNELS, funnelOfStage, type Lead } from "@/routes/_authenticated/crm";
 import { toast } from "sonner";
 import { Trash2, CalendarPlus, MessageCircle, Send } from "lucide-react";
 import { useUserRole } from "@/hooks/use-user-role";
@@ -103,18 +105,9 @@ export function waLink(phoneE164: string, text?: string) {
     : `https://wa.me/${digits}`;
 }
 
-const STAGES = [
-  { id: "novo", label: "Novo Lead" },
-  { id: "contato", label: "Em Atendimento" },
-  { id: "agendado", label: "Agendado" },
-  { id: "nao_compareceu", label: "Não compareceu" },
-  { id: "orcamento", label: "Em Orçamento" },
-  { id: "followup", label: "Follow-up Ativo" },
-  { id: "fechado", label: "Fechado" },
-  { id: "perdido", label: "Perdido" },
-];
-
-const STAGE_LABEL: Record<string, string> = Object.fromEntries(STAGES.map((s) => [s.id, s.label]));
+const STAGE_LABEL: Record<string, string> = Object.fromEntries(
+  ALL_STAGES.map((s) => [s.id, s.title]),
+);
 
 /**
  * Só avisa duplicado quando já existe outro lead ABERTO com o mesmo telefone —
@@ -337,6 +330,7 @@ export function LeadModal({
       urgent: !!form.urgent,
       budget_amount: form.budget_amount ? Number(form.budget_amount) : null,
       stage: form.stage,
+      funil: funnelOfStage(form.stage ?? "novo"),
       entry_date: form.entry_date,
       appointment_date: form.appointment_date || null,
       financing: form.financing || null,
@@ -634,10 +628,15 @@ export function LeadModal({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {STAGES.map((s) => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.label}
-                      </SelectItem>
+                    {FUNNELS.map((f) => (
+                      <SelectGroup key={f.id}>
+                        <SelectLabel>{f.title}</SelectLabel>
+                        {f.columns.map((s) => (
+                          <SelectItem key={s.id} value={s.id}>
+                            {s.title}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
                     ))}
                   </SelectContent>
                 </Select>

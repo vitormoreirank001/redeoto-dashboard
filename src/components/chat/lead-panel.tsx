@@ -4,7 +4,9 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
@@ -19,7 +21,7 @@ import {
   type CustomField,
 } from "@/components/lead-modal";
 import type { Lead } from "@/routes/_authenticated/crm";
-import { COLUMNS } from "@/routes/_authenticated/crm";
+import { FUNNELS, funnelOfStage } from "@/routes/_authenticated/crm";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { LEADS_QUERY_KEY } from "@/hooks/use-leads";
 import { useMessages } from "@/hooks/use-messages";
@@ -39,7 +41,10 @@ const STAGE_COLOR: Record<string, string> = {
   agendado: "bg-success/15 text-success border-success/30",
   nao_compareceu: "bg-destructive/15 text-destructive border-destructive/30",
   orcamento: "bg-primary/15 text-primary border-primary/30",
-  followup: "bg-morno/15 text-morno border-morno/30",
+  cadencia_1: "bg-morno/15 text-morno border-morno/30",
+  despedida: "bg-morno/15 text-morno border-morno/30",
+  ia_encaminhado: "bg-success/15 text-success border-success/30",
+  ia_insucesso: "bg-muted text-muted-foreground border-border",
   fechado: "bg-success/20 text-success border-success/40",
   perdido: "bg-muted text-muted-foreground border-border",
 };
@@ -463,7 +468,7 @@ export function LeadPanel({ lead }: { lead: Lead }) {
   return (
     <div className="flex flex-col h-full">
       <div className="p-3 border-b border-border shrink-0 flex items-center gap-2">
-        <Select value={lead.stage} onValueChange={(v) => save({ stage: v })}>
+        <Select value={lead.stage} onValueChange={(v) => save({ stage: v, funil: funnelOfStage(v) })}>
           <SelectTrigger
             className={cn(
               "h-8 flex-1 min-w-0 text-xs font-medium border",
@@ -473,14 +478,22 @@ export function LeadPanel({ lead }: { lead: Lead }) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {COLUMNS.map((c) => (
-              <SelectItem
-                key={c.id}
-                value={c.id}
-                className={cn("text-xs font-medium my-0.5 rounded", STAGE_COLOR[c.id])}
-              >
-                {c.title}
-              </SelectItem>
+            {FUNNELS.map((f) => (
+              <SelectGroup key={f.id}>
+                <SelectLabel className="text-[11px] text-muted-foreground">{f.title}</SelectLabel>
+                {f.columns.map((c) => (
+                  <SelectItem
+                    key={c.id}
+                    value={c.id}
+                    className={cn(
+                      "text-xs font-medium my-0.5 rounded",
+                      STAGE_COLOR[c.id] ?? "bg-secondary text-muted-foreground",
+                    )}
+                  >
+                    {c.title}
+                  </SelectItem>
+                ))}
+              </SelectGroup>
             ))}
           </SelectContent>
         </Select>

@@ -277,6 +277,7 @@ export type Database = {
           phone: string | null;
           phone_e164: string | null;
           service: string;
+          funil: string;
           stage: string;
           stage_changed_at: string | null;
           updated_at: string;
@@ -312,6 +313,7 @@ export type Database = {
           phone?: string | null;
           phone_e164?: string | null;
           service?: string;
+          funil?: string;
           stage?: string;
           stage_changed_at?: string | null;
           updated_at?: string;
@@ -347,6 +349,7 @@ export type Database = {
           phone?: string | null;
           phone_e164?: string | null;
           service?: string;
+          funil?: string;
           stage?: string;
           stage_changed_at?: string | null;
           updated_at?: string;

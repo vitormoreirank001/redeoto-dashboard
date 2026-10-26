@@ -64,6 +64,8 @@ export interface Lead {
   urgent: boolean;
   budget_amount: number | null;
   stage: string;
+  /** "vendas" (comercial) ou "ia" (pré-atendimento da IA). Ver FUNNELS. */
+  funil: FunnelId;
   entry_date: string;
   closed_at: string | null;
   appointment_date: string | null;
@@ -85,16 +87,56 @@ export interface Lead {
   chat_closed_at: string | null;
 }
 
+// Mesma lista do CHECK leads_stage_valido (migration 20261026000000). Mudou
+// aqui, muda lá — senão o banco recusa o lead na etapa nova.
+// "Follow-up Ativo" saiu em 26/10/2026: a sequência de retomada virou
+// 1ª Cadência → Despedida (mensagem final antes de dar como Perdido).
 export const COLUMNS = [
   { id: "novo", title: "Novo Lead" },
   { id: "contato", title: "Em Atendimento" },
+  { id: "cadencia_1", title: "1ª Cadência" },
   { id: "agendado", title: "Agendado" },
   { id: "nao_compareceu", title: "Não compareceu" },
   { id: "orcamento", title: "Em Orçamento" },
-  { id: "followup", title: "Follow-up Ativo" },
+  { id: "despedida", title: "Despedida" },
   { id: "fechado", title: "Fechado" },
   { id: "perdido", title: "Perdido" },
 ] as const;
+
+// Funil da IA de pré-atendimento, no molde do "Funil - IA - pré-atendimento"
+// do Kommo da Auto Veículos. Quem a IA qualifica vai para "Encaminhado ao
+// comercial" e o banco (trigger trg_leads_encaminhar_ia) já joga o lead no
+// funil de vendas como Novo Lead.
+export const IA_COLUMNS = [
+  { id: "ia_entrada", title: "Entrada" },
+  { id: "ia_aceito", title: "Aceito automaticamente" },
+  { id: "ia_tentativa_1", title: "1ª Tentativa" },
+  { id: "ia_tentativa_2", title: "2ª Tentativa" },
+  { id: "ia_tentativa_3", title: "3ª Tentativa" },
+  { id: "ia_tentativa_4", title: "4ª Tentativa" },
+  { id: "ia_encaminhado", title: "Encaminhado ao comercial" },
+  { id: "ia_insucesso", title: "Insucesso" },
+] as const;
+
+export type FunnelId = "vendas" | "ia";
+export type StageColumn = { id: string; title: string };
+
+export const FUNNELS: Array<{ id: FunnelId; title: string; columns: readonly StageColumn[] }> = [
+  { id: "vendas", title: "Funil de vendas", columns: COLUMNS },
+  { id: "ia", title: "IA - pré-atendimento", columns: IA_COLUMNS },
+];
+
+export const ALL_STAGES: readonly StageColumn[] = [...COLUMNS, ...IA_COLUMNS];
+
+/** Funil a que a etapa pertence — trocar a etapa no seletor troca o funil junto. */
+export function funnelOfStage(stage: string): FunnelId {
+  return stage.startsWith("ia_") ? "ia" : "vendas";
+}
+
+/** Lead sem a coluna funil (front publicado antes da migration) conta como vendas. */
+export function leadFunnel(lead: Pick<Lead, "funil">): FunnelId {
+  return lead.funil ?? "vendas";
+}
 
 // service virou texto livre (era 3 opções fixas) — mantém a cor pras 3
 // legadas e cai num tom neutro pra qualquer nome novo que a equipe digitar.
@@ -121,6 +163,8 @@ function CRMPage() {
   // AppShell) troca pro board de chips de etapa + lista vertical em MobileLeadList.
   // Desktop não muda em nada.
   const isMobile = useIsMobile(1024);
+  const [funnel, setFunnel] = useState<FunnelId>("vendas");
+  const columns = FUNNELS.find((f) => f.id === funnel)!.columns;
   const [mobileStage, setMobileStage] = useState<string>("novo");
   const [activeId, setActiveId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
@@ -128,7 +172,7 @@ function CRMPage() {
   const [filterOrigin, setFilterOrigin] = useState(ALL);
   const [filterService, setFilterService] = useState(ALL);
   const [filterUnit, setFilterUnit] = useState(ALL);
-  const [selectedStages, setSelectedStages] = useState<string[]>(() => COLUMNS.map((c) => c.id));
+  const [selectedStages, setSelectedStages] = useState<string[]>(() => ALL_STAGES.map((c) => c.id));
   const [onlyUrgent, setOnlyUrgent] = useState(false);
   const [onlyAwaitingReply, setOnlyAwaitingReply] = useState(false);
   const [period, setPeriod] = useState<Period>("all");
@@ -184,19 +228,29 @@ function CRMPage() {
 
   const moveStage = useMutation({
     mutationFn: async ({ id, stage }: { id: string; stage: string }) => {
-      const { error } = await supabase.from("leads").update({ stage }).eq("id", id);
+      const { error } = await supabase
+        .from("leads")
+        .update({ stage, funil: funnelOfStage(stage) })
+        .eq("id", id);
       if (error) throw error;
     },
     onMutate: async ({ id, stage }) => {
       await qc.cancelQueries({ queryKey: ["leads"] });
       const previous = qc.getQueryData<Lead[]>(["leads"]);
+      // "Encaminhado ao comercial" o trigger converte em Novo Lead do funil de
+      // vendas; a tela já mostra o resultado final em vez de piscar na coluna.
+      const next =
+        stage === "ia_encaminhado"
+          ? { stage: "novo", funil: "vendas" as const }
+          : { stage, funil: funnelOfStage(stage) };
       qc.setQueryData<Lead[]>(
         ["leads"],
         (old) =>
           old?.map((l) =>
-            l.id === id ? { ...l, stage, stage_changed_at: new Date().toISOString() } : l,
+            l.id === id ? { ...l, ...next, stage_changed_at: new Date().toISOString() } : l,
           ) ?? old,
       );
+      if (stage === "ia_encaminhado") toast.success("Lead encaminhado para o funil de vendas");
       return { previous };
     },
     onError: (_err, _vars, context) => {
@@ -238,6 +292,7 @@ function CRMPage() {
         : periodRange(period);
 
     return leads.filter((l) => {
+      if (leadFunnel(l) !== funnel) return false;
       if (q && !l.name.toLowerCase().includes(q) && !(l.phone ?? "").toLowerCase().includes(q)) {
         return false;
       }
@@ -267,6 +322,7 @@ function CRMPage() {
     });
   }, [
     leads,
+    funnel,
     search,
     filterMedia,
     filterOrigin,
@@ -295,7 +351,7 @@ function CRMPage() {
     filterOrigin !== ALL,
     filterService !== ALL,
     filterUnit !== ALL,
-    selectedStages.length !== COLUMNS.length,
+    columns.some((c) => !selectedStages.includes(c.id)),
     onlyUrgent,
     onlyAwaitingReply,
     period !== "all",
@@ -309,7 +365,7 @@ function CRMPage() {
     setFilterOrigin(ALL);
     setFilterService(ALL);
     setFilterUnit(ALL);
-    setSelectedStages(COLUMNS.map((c) => c.id));
+    setSelectedStages(ALL_STAGES.map((c) => c.id));
     setOnlyUrgent(false);
     setOnlyAwaitingReply(false);
     setPeriod("all");
@@ -332,11 +388,33 @@ function CRMPage() {
       <header className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">CRM</h1>
-          <p className="text-muted-foreground mt-0.5 text-sm">Funil de vendas</p>
+          <p className="text-muted-foreground mt-0.5 text-sm">
+            {FUNNELS.find((f) => f.id === funnel)!.title}
+          </p>
         </div>
-        <Button onClick={() => setCreating(true)}>
-          <Plus className="h-4 w-4 mr-2" /> Novo Lead
-        </Button>
+        <div className="flex items-center gap-2">
+          <Select
+            value={funnel}
+            onValueChange={(v) => {
+              setFunnel(v as FunnelId);
+              setMobileStage(FUNNELS.find((f) => f.id === v)!.columns[0].id);
+            }}
+          >
+            <SelectTrigger className="h-9 w-[200px]" aria-label="Funil">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {FUNNELS.map((f) => (
+                <SelectItem key={f.id} value={f.id}>
+                  {f.title}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button onClick={() => setCreating(true)}>
+            <Plus className="h-4 w-4 mr-2" /> Novo Lead
+          </Button>
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -418,7 +496,7 @@ function CRMPage() {
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Etapas ativas</label>
                 <div className="border border-border rounded-lg p-2.5 space-y-2">
-                  {COLUMNS.map((col) => (
+                  {columns.map((col) => (
                     <label key={col.id} className="flex items-center gap-2 text-sm cursor-pointer">
                       <Checkbox
                         checked={selectedStages.includes(col.id)}
@@ -547,6 +625,7 @@ function CRMPage() {
       {isMobile ? (
         <MobileLeadList
           leads={filteredLeads}
+          columns={columns}
           activeStage={mobileStage}
           onStageChange={setMobileStage}
           onOpen={(lead) => setOpenLeadId(lead.id)}
@@ -555,7 +634,7 @@ function CRMPage() {
         <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
           <div className="flex-1 overflow-x-auto overflow-y-hidden">
             <div className="flex gap-4 h-full min-w-max pb-2">
-              {COLUMNS.map((col) => {
+              {columns.map((col) => {
                 const items = filteredLeads.filter((l) => l.stage === col.id);
                 return (
                   <KanbanColumn
@@ -603,7 +682,7 @@ function KanbanColumn({
   items,
   onOpen,
 }: {
-  col: (typeof COLUMNS)[number];
+  col: StageColumn;
   items: Lead[];
   onOpen: (lead: Lead) => void;
 }) {
@@ -677,11 +756,13 @@ function KanbanCard({ lead, onOpen }: { lead: Lead; onOpen: (lead: Lead) => void
  */
 function MobileLeadList({
   leads,
+  columns,
   activeStage,
   onStageChange,
   onOpen,
 }: {
   leads: Lead[];
+  columns: readonly StageColumn[];
   activeStage: string;
   onStageChange: (stage: string) => void;
   onOpen: (lead: Lead) => void;
@@ -690,7 +771,7 @@ function MobileLeadList({
   return (
     <div className="flex-1 min-h-0 flex flex-col">
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 sm:-mx-0 sm:px-0">
-        {COLUMNS.map((col) => {
+        {columns.map((col) => {
           const count = leads.filter((l) => l.stage === col.id).length;
           const active = col.id === activeStage;
           return (

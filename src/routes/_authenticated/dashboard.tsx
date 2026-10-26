@@ -48,7 +48,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
 import { isAwaitingReply } from "@/lib/lead-sla";
-import { COLUMNS } from "./crm";
+import { ALL_STAGES, leadFunnel } from "./crm";
 import type { Lead } from "./crm";
 import { CalendarPlus, MessageCircle } from "lucide-react";
 import { useLeads } from "@/hooks/use-leads";
@@ -65,7 +65,7 @@ function countBetween(items: { date: string }[], start: string, end: string) {
 }
 
 const STAGE_LABEL: Record<string, { title: string }> = Object.fromEntries(
-  COLUMNS.map((c) => [c.id, { title: c.title }]),
+  ALL_STAGES.map((c) => [c.id, { title: c.title }]),
 );
 
 /** Tempo decorrido desde um instante, em texto curto (min/h/d). */
@@ -117,6 +117,9 @@ interface ActionItem {
 
 /** Um motivo por lead, na ordem de urgência: sem resposta > sem agendamento > lembrete próximo. */
 function buildActionItem(lead: Lead): ActionItem | null {
+  // Funil da IA: quem conversa é a IA; o lead entra na fila quando ela
+  // encaminha para o comercial.
+  if (leadFunnel(lead) === "ia") return null;
   if (isAwaitingReply(lead)) {
     if (isStaleReply(lead)) return null;
     return {
@@ -265,7 +268,7 @@ function DashboardPage() {
   const made = sumCalls("made", ms, me);
   const rate = made > 0 ? Math.round((ans / made) * 100) : 0;
 
-  const awaitingAll = leads.filter(isAwaitingReply);
+  const awaitingAll = leads.filter((l) => leadFunnel(l) !== "ia" && isAwaitingReply(l));
   const staleReplyCount = awaitingAll.filter(isStaleReply).length;
   const awaitingReplyCount = awaitingAll.length - staleReplyCount;
 

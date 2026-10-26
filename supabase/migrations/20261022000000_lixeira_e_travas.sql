@@ -6,8 +6,7 @@
 --    guarda a linha inteira em public.lixeira, com quem apagou. O admin vê e
 --    restaura pela tela de Configurações. Restaurar um lead traz de volta as
 --    mensagens do chat que foram apagadas junto (ON DELETE CASCADE).
--- 2. leads.stage só aceita as etapas do Kanban (antes era TEXT livre: um
---    typo gravava uma etapa que nenhuma coluna mostra e o lead "sumia").
+-- 2. (trava de etapas: ver 20261026000000_funil_ia_e_cadencia.sql)
 -- 3. automation_messages: UPDATE deixa de ser aberto a qualquer usuário
 --    logado. O front não edita mensagem; quem atualiza status/mídia é o n8n,
 --    com a service role (que ignora RLS).
@@ -142,12 +141,9 @@ GRANT EXECUTE ON FUNCTION public.restaurar_da_lixeira(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.guardar_na_lixeira() FROM PUBLIC, anon, authenticated;
 
 -- ---------------------------------------------------------------------------
--- 2. Etapas válidas do lead (mesma lista de COLUMNS em src/routes/_authenticated/crm.tsx)
+-- 2. Etapas válidas do lead: movido para 20261026000000_funil_ia_e_cadencia.sql
+--    (as etapas mudaram antes desta migration ir para produção).
 -- ---------------------------------------------------------------------------
-ALTER TABLE public.leads DROP CONSTRAINT IF EXISTS leads_stage_valido;
-ALTER TABLE public.leads ADD CONSTRAINT leads_stage_valido CHECK (
-  stage IN ('novo', 'contato', 'agendado', 'nao_compareceu', 'orcamento', 'followup', 'fechado', 'perdido')
-);
 
 -- ---------------------------------------------------------------------------
 -- 3. automation_messages: UPDATE só admin (n8n usa service role)
